@@ -4,7 +4,7 @@ import Svg, { ClipPath, Defs, Image, Path } from "react-native-svg";
 
 import CardHeader from "./CardHeader";
 import CardFooter from "./CardFooter";
-import dummyPost from "../../data/dummyPost";
+import { MOCK_POSTS } from "../../data/mockData";
 
 const Card = ({ children, width, height, radius }) => {
   const adjustedRadius = Math.min(radius, width / 2, height / 2);
@@ -45,7 +45,7 @@ const Card = ({ children, width, height, radius }) => {
           width="100%"
           height="100%"
           preserveAspectRatio="xMidYMid slice"
-          href={dummyPost.image}
+          href={MOCK_POSTS[0].picturePath}
           clipPath="url(#clip)"
         />
       </Svg>

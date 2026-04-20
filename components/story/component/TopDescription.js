@@ -1,7 +1,7 @@
 import { Image, StyleSheet, Text, View } from "react-native";
 import React from "react";
 import { wpx } from "../helpers/Scale";
-import { USERS } from "../../../data/users";
+import { MOCK_USERS } from "../../../data/mockData";
 
 const TopDescription = () => {
   return (
@@ -20,7 +20,7 @@ const TopDescription = () => {
               resizeMode: "cover",
               borderRadius: 15,
             }}
-            source={{ uri: USERS[0].image }}
+            source={{ uri: MOCK_USERS[0].picturePath }}
           />
         </View>
         <Text

@@ -10,7 +10,7 @@ import {
 import React, { memo, useState } from "react";
 import { GlobalStyles } from "../../constants/Styles";
 import EmojisList from "../searchScreen/EmojisList";
-import { USERS } from "../../data/users";
+import { MOCK_USERS } from "../../data/mockData";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import PressEffect from "../UI/PressEffect";
@@ -21,7 +21,7 @@ import EmojiInput from "../UI/EmojiInput";
 const RenderStory = ({ active, nextUser, previousUser, index }) => {
   const navigation = useNavigation();
   const [currentStory, setCurrentStory] = useState(0);
-  const noOfStories = USERS[0].stories.length;
+  const noOfStories = MOCK_USERS[0].stories?.length ?? 1;
   console.log("object", index);
   const nextStory = () => {
     if (currentStory < noOfStories - 1) {
@@ -81,11 +81,11 @@ const RenderStory = ({ active, nextUser, previousUser, index }) => {
                 }}
               >
                 <Image
-                  source={{ uri: USERS[0].image }}
+                  source={{ uri: MOCK_USERS[0].picturePath }}
                   style={{ width: 40, height: 40, borderRadius: 50 }}
                 />
                 <View style={{ paddingLeft: 10 }}>
-                  <Text style={{ color: "white" }}>{USERS[0].user}</Text>
+                  <Text style={{ color: "white" }}>{MOCK_USERS[0].username}</Text>
                   <Text
                     style={{ color: GlobalStyles.colors.gray, fontSize: 10 }}
                   >
@@ -128,7 +128,7 @@ const RenderStory = ({ active, nextUser, previousUser, index }) => {
       >
         <Image
           source={{
-            uri: USERS[0].stories[currentStory],
+            uri: MOCK_USERS[0].stories?.[currentStory] ?? MOCK_USERS[0].picturePath,
           }}
           style={{
             flex: 1,

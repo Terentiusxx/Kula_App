@@ -7,8 +7,8 @@ import {
   View,
 } from "react-native";
 import React from "react";
-import { POSTS } from "../../data/posts";
-import { USERS } from "../../data/users";
+import { MOCK_POSTS } from "../../data/mockData";
+import { MOCK_USERS } from "../../data/mockData";
 import { useNavigation } from "@react-navigation/native";
 const { height, width } = Dimensions.get("window");
 const size = width / 4 - 10;
@@ -22,24 +22,24 @@ const CollectionCard = () => {
     >
       <View style={styles.row}>
         <Image
-          source={{ uri: POSTS[0].imageUrl }}
+          source={{ uri: MOCK_POSTS[0].picturePath }}
           style={styles.image}
           resizeMode="cover"
         />
         <Image
-          source={{ uri: USERS[1].image }}
+          source={{ uri: MOCK_USERS[1].picturePath }}
           style={styles.image}
           resizeMode="cover"
         />
       </View>
       <View style={styles.row}>
         <Image
-          source={{ uri: POSTS[0].imageUrl }}
+          source={{ uri: MOCK_POSTS[0].picturePath }}
           style={styles.image}
           resizeMode="cover"
         />
         <Image
-          source={{ uri: USERS[1].story }}
+          source={{ uri: MOCK_USERS[1].picturePath }}
           style={styles.image}
           resizeMode="cover"
         />

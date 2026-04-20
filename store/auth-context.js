@@ -20,7 +20,6 @@ function AuthContentProvider({ children }) {
   // ── TODO (backend): validate credentials, store JWT, fetch real user ──────
   function authenticate(email, password) {
     // Mock: any credentials work — just sign in immediately
-    console.log("[MOCK] authenticate called:", email);
     setIsAuthenticated(true);
   }
 
@@ -28,7 +27,6 @@ function AuthContentProvider({ children }) {
   function logout() {
     setIsAuthenticated(false);
     setUserData(MOCK_LOGGED_IN_USER); // reset to default mock user
-    console.log("[MOCK] logout");
   }
 
   // ── TODO (backend): PATCH /users/:id with updated fields ──────────────────

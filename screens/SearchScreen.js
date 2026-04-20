@@ -19,7 +19,8 @@ import Animated, {
   FadeInLeft,
   FadeOutRight,
 } from "react-native-reanimated";
-import { USER_DATA } from "../data/USER";
+// MOCK MODE: Using MOCK_USERS — replace with API call to GET /users/search?q=... when backend is ready
+import { MOCK_USERS } from "../data/mockData";
 
 const SearchScreen = ({ navigation }) => {
   const [search, setSearch] = useState("");
@@ -29,7 +30,7 @@ const SearchScreen = ({ navigation }) => {
     setSearch(text);
     if (text.length > 0) {
       try {
-        setUsers(USER_DATA);
+        setUsers(MOCK_USERS);
       } catch (error) {
         console.error("There was a problem with the fetch operation:", error);
       }

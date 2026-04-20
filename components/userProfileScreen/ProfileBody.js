@@ -16,7 +16,8 @@ import React, { useState, useEffect, useContext } from "react";
 import Post from "../../components/userProfileScreen/Post";
 import { AuthContext } from "../../store/auth-context";
 import { Ionicons } from "@expo/vector-icons";
-import { POSTS } from "../../data/posts.js";
+// MOCK MODE: Using MOCK_POSTS — replace with API call to GET /posts/:userId when backend is ready
+import { MOCK_POSTS } from "../../data/mockData.js";
 
 const TopTab = createMaterialTopTabNavigator();
 
@@ -30,7 +31,7 @@ function Posts({ navigation, route, refreshing }) {
       setFetching(true);
 
       setErrorFetching(false);
-      setPosts(POSTS);
+      setPosts(MOCK_POSTS);
     } catch (error) {
       setErrorFetching(true);
       console.log(error);

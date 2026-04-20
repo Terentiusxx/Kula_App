@@ -11,7 +11,6 @@ import {
   Dimensions,
 } from "react-native";
 import React, { useRef, useState } from "react";
-import { USERS } from "../../../data/users";
 import { useNavigation } from "@react-navigation/native";
 import { GlobalStyles } from "../../../constants/Styles";
 import ImageStory from "../../story/ImageStory";

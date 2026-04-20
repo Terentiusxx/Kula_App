@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Pressable, Text, View, Image as Image, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import dummyPost from "../../data/dummyPost";
+import { MOCK_USERS } from "../../data/mockData";
 
 const CardFooter = ({ radius, width }) => {
   const [text, setText] = useState("");
@@ -18,7 +18,7 @@ const CardFooter = ({ radius, width }) => {
       }}
     >
       <Image
-        source={{ uri: dummyPost.sender }}
+        source={{ uri: MOCK_USERS[1].picturePath }}
         style={{ width: 40, height: 50, borderRadius: 50 }}
       />
       <View style={{ flex: 1 }}>

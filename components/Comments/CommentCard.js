@@ -2,13 +2,13 @@ import { Image, StyleSheet, Text, View } from "react-native";
 import React from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { GlobalStyles } from "../../constants/Styles";
-import { USERS } from "../../data/users";
+import { MOCK_USERS } from "../../data/mockData";
 function CommentCard() {
   return (
     <View style={styles.container}>
       <View style={{ flexDirection: "row" }}>
         <Image
-          source={{ uri: USERS[1].image }}
+          source={{ uri: MOCK_USERS[0].picturePath }}
           style={{
             width: 50,
             height: 50,

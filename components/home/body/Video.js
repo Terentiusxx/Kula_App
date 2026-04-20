@@ -4,7 +4,8 @@ import { GlobalStyles } from "../../../constants/Styles";
 import { FlatList } from "react-native";
 import { RefreshControl } from "react-native";
 import Post from "./Post";
-import { POSTS } from "../../../data/posts";
+// MOCK MODE: Using MOCK_POSTS — replace with paginated API call when backend is ready
+import { MOCK_POSTS } from "../../../data/mockData";
 import { CONTAINER_HEIGHT } from "../head/Stories";
 import { useSharedValue } from "react-native-reanimated";
 
@@ -39,7 +40,7 @@ const Video = ({ StoryTranslate }) => {
         renderItem={({ data, index }) => {
           return (
             <View>
-              <Post post={index % 2 === 0 ? POSTS[0] : POSTS[1]} />
+              <Post post={index % 2 === 0 ? MOCK_POSTS[0] : MOCK_POSTS[1]} />
             </View>
           );
         }}

@@ -1,7 +1,7 @@
 import * as React from "react";
 import { Pressable, Text, View, Image as Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import dummyPost from "../../data/dummyPost";
+import { MOCK_USERS } from "../../data/mockData";
 import { GlobalStyles } from "../../constants/Styles";
 import PressEffect from "../UI/PressEffect";
 
@@ -18,7 +18,7 @@ const CardHeader = ({ radius }) => {
     >
       <View style={{ flexDirection: "row" }}>
         <Image
-          source={{ uri: dummyPost.profilepic }}
+          source={{ uri: MOCK_USERS[0].picturePath }}
           style={{
             width: 50,
             height: 50,
@@ -33,10 +33,10 @@ const CardHeader = ({ radius }) => {
           }}
         >
           <Text style={{ color: "white", fontWeight: "600" }}>
-            {dummyPost.username}
+            {MOCK_USERS[0].username}
           </Text>
           <Text style={{ color: "rgba(255,255,255,0.5)" }}>
-            {dummyPost.time}
+            {"2 hours ago"}
           </Text>
         </View>
       </View>
