@@ -1,21 +1,23 @@
-import { Dimensions, StyleSheet } from "react-native";
+import { StyleSheet } from "react-native";
 import React from "react";
 import { Path, Svg } from "react-native-svg";
+import { getTabBarMetrics } from "./tabBarMetrics";
 
-const TabBarSvg = ({ height }) => {
-  const { width: WIDTH } = Dimensions.get("screen");
+const TabBarSvg = ({ width, height }) => {
+  const WIDTH = width;
   const HEIGHT = height;
-  const SPACE = 10;
-  const MIDPOIN1X = WIDTH / 2 - 50 / 2 - SPACE;
-  const MIDPOIN2X = WIDTH / 2 + 50 / 2 + SPACE;
-  const MIDPOINY = 50 / 2 + SPACE;
-  const radius = 10;
+  const metrics = getTabBarMetrics(WIDTH);
+  const centerX = WIDTH / 2;
+  const MIDPOIN1X = centerX - metrics.notchHalfWidth;
+  const MIDPOIN2X = centerX + metrics.notchHalfWidth;
+  const MIDPOINY = metrics.notchDepth;
+  const radius = metrics.shoulderRadius;
 
   const path = `
     M0,0
     L${MIDPOIN1X - radius},${0}
     A${radius},${radius} 0 0,1 ${MIDPOIN1X},${radius}
-    A${MIDPOINY},${MIDPOINY} 0 0,0 ${WIDTH / 2},${MIDPOINY}
+    A${MIDPOINY},${MIDPOINY} 0 0,0 ${centerX},${MIDPOINY}
     A${MIDPOINY},${MIDPOINY} 0 0,0 ${MIDPOIN2X},${radius}
     A${radius},${radius} 0 0,1 ${MIDPOIN2X + radius},${0}
     L${MIDPOIN2X},${0}

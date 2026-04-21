@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Pressable,
   Image,
+  useWindowDimensions,
 } from "react-native";
 import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
 import { GlobalStyles } from "../../constants/Styles.js";
@@ -16,8 +17,7 @@ import React, { useState, useEffect, useContext } from "react";
 import Post from "../../components/userProfileScreen/Post";
 import { AuthContext } from "../../store/auth-context";
 import { Ionicons } from "@expo/vector-icons";
-// MOCK MODE: Using MOCK_POSTS — replace with API call to GET /posts/:userId when backend is ready
-import { MOCK_POSTS } from "../../data/mockData.js";
+import { fetchFeedPosts, fetchUserPosts } from "../../services/repositories/postsRepository";
 
 const TopTab = createMaterialTopTabNavigator();
 
@@ -26,12 +26,19 @@ function Posts({ navigation, route, refreshing }) {
   const [fetching, setFetching] = useState(true);
   const [errorFetching, setErrorFetching] = useState(false);
   const [posts, setPosts] = useState([]);
+  const { width } = useWindowDimensions();
+  const emptySize = Math.min(320, Math.max(180, width * 0.72));
   const getPosts = async () => {
     try {
       setFetching(true);
-
+      const userId = authCtx.userData?._id || authCtx.userData?.id;
+      const result = await fetchUserPosts(userId, { maxResults: 40 });
       setErrorFetching(false);
-      setPosts(MOCK_POSTS);
+      if (result.ok) {
+        setPosts(result.data || []);
+      } else {
+        setPosts([]);
+      }
     } catch (error) {
       setErrorFetching(true);
       console.log(error);
@@ -107,8 +114,8 @@ function Posts({ navigation, route, refreshing }) {
           <Image
             source={require("../../assets/no-photo.jpg")}
             style={{
-              width: 300,
-              height: 300,
+              width: emptySize,
+              height: emptySize,
               resizeMode: "contain",
             }}
           />
@@ -119,6 +126,24 @@ function Posts({ navigation, route, refreshing }) {
 }
 
 function Videos() {
+  const [collections, setCollections] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+    async function loadCollections() {
+      const result = await fetchFeedPosts({ maxResults: 12 });
+      if (!active || !result.ok) {
+        return;
+      }
+      const items = (result.data || []).slice(0, 6);
+      setCollections(items);
+    }
+    loadCollections();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <View style={{ backgroundColor: GlobalStyles.colors.primary }}>
       <FlatList
@@ -129,12 +154,19 @@ function Videos() {
           paddingBottom: GlobalStyles.styles.tabBarPadding,
         }}
         keyExtractor={(data, index) => index.toString()}
-        data={[1, 2, 3, 4, 5, 6]}
+        data={collections}
         numColumns={2}
-        renderItem={({ data, index }) => {
+        keyExtractor={(item, index) => String(item?._id || item?.id || index)}
+        renderItem={({ item, index }) => {
+          const images = [
+            item?.picturePath || item?.image,
+            item?.thumbnailPath || item?.picturePath || item?.image,
+            item?.coverImage || item?.picturePath || item?.image,
+            item?.picturePath || item?.image,
+          ].filter(Boolean);
           return (
             <View>
-              <CollectionCard />
+              <CollectionCard images={images} title={item?.title || "Collection"} />
             </View>
           );
         }}
@@ -143,21 +175,25 @@ function Videos() {
   );
 }
 const ProfileBody = ({ refreshing }) => {
+  const { width } = useWindowDimensions();
+  const labelSize = Math.min(18, Math.max(14, width * 0.042));
+  const indicatorWidth = Math.min(50, Math.max(28, width * 0.1));
+  const indicatorLeft = Math.max(12, width * 0.2 - indicatorWidth / 2);
   return (
     <TopTab.Navigator
       screenOptions={{
         tabBarActiveTintColor: "white",
         tabBarLabelStyle: {
           textTransform: "none",
-          fontSize: 18,
+          fontSize: labelSize,
           padding: 0,
           margin: 0,
         },
         tabBarInactiveTintColor: "rgba(255,255,255,0.3)",
         tabBarIndicatorStyle: {
           height: 3,
-          width: "10%",
-          left: "20%",
+          width: indicatorWidth,
+          left: indicatorLeft,
           borderRadius: 30,
           backgroundColor: GlobalStyles.colors.purple,
         },

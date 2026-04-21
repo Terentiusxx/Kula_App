@@ -1,21 +1,45 @@
-import { View, Text, StyleSheet, Dimensions } from "react-native";
+import { View, Text, StyleSheet, useWindowDimensions } from "react-native";
 import React from "react";
 import SignupForm from "../components/signupScreen/SignupForm";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { KULA } from "../constants/Styles";
 import { Ionicons } from "@expo/vector-icons";
 
-const { height } = Dimensions.get("window");
-
 const SignupScreen = ({ navigation }) => {
+  const { width, height } = useWindowDimensions();
+  const blobTopSize = Math.min(280, Math.max(190, width * 0.64));
+  const blobBottomSize = Math.min(320, Math.max(220, width * 0.75));
+  const cardHorizontal = Math.min(24, Math.max(14, width * 0.05));
   return (
     <SafeAreaView style={styles.container}>
       {/* Decorative blobs */}
-      <View style={styles.blobTopRight} />
-      <View style={styles.blobBottomLeft} />
+      <View
+        style={[
+          styles.blobTopRight,
+          {
+            width: blobTopSize,
+            height: blobTopSize,
+            borderRadius: blobTopSize / 2,
+            top: -blobTopSize * 0.33,
+            right: -blobTopSize * 0.33,
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.blobBottomLeft,
+          {
+            width: blobBottomSize,
+            height: blobBottomSize,
+            borderRadius: blobBottomSize / 2,
+            bottom: -blobBottomSize * 0.36,
+            left: -blobBottomSize * 0.28,
+          },
+        ]}
+      />
 
       {/* Header */}
-      <View style={styles.header}>
+      <View style={[styles.header, { marginTop: height * 0.06, paddingHorizontal: cardHorizontal + 4 }]}>
         <View style={styles.logoContainer}>
           <Ionicons name="people-outline" size={34} color={KULA.terracotta} />
         </View>
@@ -24,7 +48,7 @@ const SignupScreen = ({ navigation }) => {
       </View>
 
       {/* Form card */}
-      <View style={styles.card}>
+      <View style={[styles.card, { marginHorizontal: cardHorizontal }]}>
         <SignupForm navigation={navigation} />
       </View>
     </SafeAreaView>
@@ -40,33 +64,21 @@ const styles = StyleSheet.create({
   },
   blobTopRight: {
     position: "absolute",
-    top: -80,
-    right: -80,
-    width: 240,
-    height: 240,
-    borderRadius: 120,
     backgroundColor: "rgba(193,96,58,0.09)",
   },
   blobBottomLeft: {
     position: "absolute",
-    bottom: -100,
-    left: -80,
-    width: 280,
-    height: 280,
-    borderRadius: 140,
     backgroundColor: "rgba(29,158,117,0.09)",
   },
   header: {
     alignItems: "center",
-    marginTop: height * 0.06,
     marginBottom: 28,
-    paddingHorizontal: 24,
   },
   logoContainer: {
     width: 68,
     height: 68,
     borderRadius: 20,
-    backgroundColor: "#FDEEE6",
+    backgroundColor: "rgba(193,96,58,0.14)",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 18,

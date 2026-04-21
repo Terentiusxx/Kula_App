@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { Pressable, Text, View, Image as Image, TextInput } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { MOCK_USERS } from "../../data/mockData";
 
-const CardFooter = ({ radius, width }) => {
+const CardFooter = ({ radius, width, user = {} }) => {
   const [text, setText] = useState("");
+  const picturePath =
+    user.picturePath ||
+    "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80";
   return (
     <View
       style={{
@@ -18,7 +20,7 @@ const CardFooter = ({ radius, width }) => {
       }}
     >
       <Image
-        source={{ uri: MOCK_USERS[1].picturePath }}
+        source={{ uri: picturePath }}
         style={{ width: 40, height: 50, borderRadius: 50 }}
       />
       <View style={{ flex: 1 }}>

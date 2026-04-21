@@ -1,13 +1,38 @@
 import { StyleSheet, View } from "react-native";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { FlatList, RefreshControl } from "react-native";
 import PostAdvance from "./PostAdvance";
-import { MOCK_POSTS } from "../../../data/mockData";
 import { CONTAINER_HEIGHT } from "../head/Stories";
 import { useSharedValue } from "react-native-reanimated";
+import { fetchFeedPosts } from "../../../services/repositories/postsRepository";
 
 const Feed = ({ StoryTranslate }) => {
   const lastScrollY = useSharedValue(0);
+  const [posts, setPosts] = useState([]);
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    async function loadFeed() {
+      const result = await fetchFeedPosts({ maxResults: 40 });
+      if (active && result.ok) {
+        setPosts(result.data || []);
+      }
+    }
+    loadFeed();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function refreshFeed() {
+    setRefreshing(true);
+    const result = await fetchFeedPosts({ maxResults: 40 });
+    if (result.ok) {
+      setPosts(result.data || []);
+    }
+    setRefreshing(false);
+  }
 
   return (
     <View style={styles.container}>
@@ -26,9 +51,9 @@ const Feed = ({ StoryTranslate }) => {
         onMomentumScrollEnd={(event) => {
           lastScrollY.value = event.nativeEvent.contentOffset.y;
         }}
-        refreshControl={<RefreshControl refreshing={false} onRefresh={() => {}} />}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refreshFeed} />}
         keyExtractor={(item) => item._id}
-        data={MOCK_POSTS}
+        data={posts}
         renderItem={({ item }) => (
           <View>
             <PostAdvance post={item} />

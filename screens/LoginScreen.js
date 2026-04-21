@@ -1,23 +1,47 @@
-import { View, Text, StyleSheet, Dimensions } from "react-native";
+import { View, Text, StyleSheet, useWindowDimensions } from "react-native";
 import React from "react";
 import LoginForm from "../components/loginScreen/LoginForm";
-import { GlobalStyles } from "../constants/Styles";
+import { KULA } from "../constants/Styles";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 
-const { width, height } = Dimensions.get("window");
-
 const LoginScreen = ({ navigation }) => {
+  const { width, height } = useWindowDimensions();
+  const blobTopSize = Math.min(300, Math.max(210, width * 0.68));
+  const blobBottomSize = Math.min(340, Math.max(240, width * 0.78));
+  const cardHorizontal = Math.min(24, Math.max(14, width * 0.05));
   return (
     <SafeAreaView style={styles.container}>
       {/* Decorative blobs */}
-      <View style={styles.blobTopRight} />
-      <View style={styles.blobBottomLeft} />
+      <View
+        style={[
+          styles.blobTopRight,
+          {
+            width: blobTopSize,
+            height: blobTopSize,
+            borderRadius: blobTopSize / 2,
+            top: -blobTopSize * 0.31,
+            right: -blobTopSize * 0.31,
+          },
+        ]}
+      />
+      <View
+        style={[
+          styles.blobBottomLeft,
+          {
+            width: blobBottomSize,
+            height: blobBottomSize,
+            borderRadius: blobBottomSize / 2,
+            bottom: -blobBottomSize * 0.33,
+            left: -blobBottomSize * 0.27,
+          },
+        ]}
+      />
 
       {/* Header area */}
-      <View style={styles.header}>
+      <View style={[styles.header, { marginTop: height * 0.08, paddingHorizontal: cardHorizontal + 4 }]}>
         <View style={styles.logoContainer}>
-          <Ionicons name="aperture-outline" size={36} color="#7A40F8" />
+          <Ionicons name="aperture-outline" size={36} color={KULA.teal} />
         </View>
         <Text style={styles.welcomeText}>Welcome back</Text>
         <Text style={styles.subtitleText}>
@@ -26,7 +50,7 @@ const LoginScreen = ({ navigation }) => {
       </View>
 
       {/* Form card */}
-      <View style={styles.card}>
+      <View style={[styles.card, { marginHorizontal: cardHorizontal }]}>
         <LoginForm navigation={navigation} />
       </View>
     </SafeAreaView>
@@ -38,68 +62,58 @@ export default LoginScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F5F7FF",
+    backgroundColor: KULA.cream,
   },
   blobTopRight: {
     position: "absolute",
-    top: -80,
-    right: -80,
-    width: 260,
-    height: 260,
-    borderRadius: 130,
-    backgroundColor: "rgba(122, 64, 248, 0.10)",
+    backgroundColor: "rgba(193,96,58,0.09)",
   },
   blobBottomLeft: {
     position: "absolute",
-    bottom: -100,
-    left: -80,
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: "rgba(107, 176, 245, 0.12)",
+    backgroundColor: "rgba(29,158,117,0.09)",
   },
   header: {
     alignItems: "center",
-    marginTop: height * 0.08,
     marginBottom: 32,
-    paddingHorizontal: 24,
   },
   logoContainer: {
-    width: 72,
-    height: 72,
-    borderRadius: 22,
-    backgroundColor: "#EDE9FF",
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+    backgroundColor: "#EAF8F2",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 20,
-    shadowColor: "#7A40F8",
+    marginBottom: 18,
+    shadowColor: KULA.teal,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
-    shadowRadius: 12,
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
     elevation: 4,
   },
   welcomeText: {
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: "800",
-    color: "#1A1A2E",
+    color: KULA.brown,
     letterSpacing: -0.5,
     marginBottom: 6,
   },
   subtitleText: {
-    fontSize: 15,
-    color: "#7A7A9D",
+    fontSize: 14,
+    color: KULA.muted,
     letterSpacing: 0.1,
+    textAlign: "center",
+    lineHeight: 20,
   },
   card: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: KULA.white,
     marginHorizontal: 20,
     borderRadius: 28,
     paddingVertical: 28,
     paddingHorizontal: 20,
-    shadowColor: "#7A40F8",
+    shadowColor: KULA.brown,
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.10,
+    shadowOpacity: 0.09,
     shadowRadius: 24,
-    elevation: 8,
+    elevation: 6,
   },
 });

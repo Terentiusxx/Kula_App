@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -14,73 +14,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { KULA } from "../constants/Styles";
 import FAB from "../components/UI/FAB";
 import { useNavigation } from "@react-navigation/native";
-
-// ── Mock data ──────────────────────────────────────────────────────────────────
-const CUISINES = [
-  {
-    _id: "c1",
-    name: "Ghanaian",
-    image: "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=300&q=80",
-  },
-  {
-    _id: "c2",
-    name: "Nigerian",
-    image: "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=300&q=80",
-  },
-  {
-    _id: "c3",
-    name: "Ethiopian",
-    image: "https://images.unsplash.com/photo-1536329583941-14287ec6fc4e?w=300&q=80",
-  },
-  {
-    _id: "c4",
-    name: "Lebanese",
-    image: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=300&q=80",
-  },
-  {
-    _id: "c5",
-    name: "Indian",
-    image: "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=300&q=80",
-  },
-  {
-    _id: "c6",
-    name: "Japanese",
-    image: "https://images.unsplash.com/photo-1546069901-ba9599a7e63c?w=300&q=80",
-  },
-];
-
-const RESTAURANTS = [
-  {
-    _id: "r1",
-    name: "Azmera Restaurant",
-    cuisine: "Ethiopian",
-    rating: 4.7,
-    reviewCount: 142,
-    distance: "1.2 km",
-    isOpen: true,
-    image: "https://images.unsplash.com/photo-1536329583941-14287ec6fc4e?w=800&q=80",
-  },
-  {
-    _id: "r2",
-    name: "Buka West African Kitchen",
-    cuisine: "Ghanaian · Nigerian",
-    rating: 4.5,
-    reviewCount: 89,
-    distance: "0.7 km",
-    isOpen: true,
-    image: "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=800&q=80",
-  },
-  {
-    _id: "r3",
-    name: "Mama Oliech",
-    cuisine: "Kenyan",
-    rating: 4.3,
-    reviewCount: 234,
-    distance: "2.3 km",
-    isOpen: false,
-    image: "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=800&q=80",
-  },
-];
+import {
+  fetchCuisines,
+  fetchRestaurants,
+} from "../services/repositories/foodCultureRepository";
 
 // ── Restaurant card ────────────────────────────────────────────────────────────
 function RestaurantCard({ restaurant }) {
@@ -122,6 +59,49 @@ function RestaurantCard({ restaurant }) {
 // ── Food & Culture Screen ──────────────────────────────────────────────────────
 export default function FoodCultureScreen() {
   const navigation = useNavigation();
+  const [cuisines, setCuisines] = useState([]);
+  const [restaurants, setRestaurants] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadData() {
+      setLoading(true);
+      setLoadError("");
+      const [cuisineResult, restaurantResult] = await Promise.all([
+        fetchCuisines(20),
+        fetchRestaurants(20),
+      ]);
+
+      if (!active) {
+        return;
+      }
+
+      if (cuisineResult.ok) {
+        setCuisines(cuisineResult.data || []);
+      } else {
+        setCuisines([]);
+      }
+
+      if (restaurantResult.ok) {
+        setRestaurants(restaurantResult.data || []);
+      } else {
+        setRestaurants([]);
+      }
+
+      if (!cuisineResult.ok || !restaurantResult.ok) {
+        setLoadError("Some food and culture items could not be loaded.");
+      }
+      setLoading(false);
+    }
+
+    loadData();
+    return () => {
+      active = false;
+    };
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -144,7 +124,7 @@ export default function FoodCultureScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.cuisinesRow}
         >
-          {CUISINES.map((cuisine) => (
+          {cuisines.map((cuisine) => (
             <TouchableOpacity key={cuisine._id} style={styles.cuisineCard} activeOpacity={0.8}>
               <Image source={{ uri: cuisine.image }} style={styles.cuisineImage} />
               <Text style={styles.cuisineName}>{cuisine.name}</Text>
@@ -156,9 +136,16 @@ export default function FoodCultureScreen() {
         <Text style={[styles.sectionTitle, { marginTop: 24 }]}>Nearby Restaurants</Text>
 
         <View style={styles.restaurantsList}>
-          {RESTAURANTS.map((r) => (
+          {restaurants.map((r) => (
             <RestaurantCard key={r._id} restaurant={r} />
           ))}
+          {loading || loadError ? (
+            <Text style={styles.emptyText}>
+              {loading
+                ? "Loading food and culture..."
+                : loadError || "No food and culture items yet."}
+            </Text>
+          ) : null}
         </View>
       </ScrollView>
 
@@ -242,4 +229,10 @@ const styles = StyleSheet.create({
     borderRadius: 50,
   },
   openBadgeText: { fontSize: 13, fontWeight: "600", color: KULA.white },
+  emptyText: {
+    color: KULA.muted,
+    fontSize: 14,
+    textAlign: "center",
+    marginTop: 10,
+  },
 });

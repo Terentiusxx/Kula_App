@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -14,56 +14,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { KULA } from "../constants/Styles";
 import FAB from "../components/UI/FAB";
 import { useNavigation } from "@react-navigation/native";
+import { AuthContext } from "../store/auth-context";
+import { fetchNearbyUsers } from "../services/repositories/discoveryRepository";
 
-// ── Mock data ──────────────────────────────────────────────────────────────────
 const FILTERS = ["New Arrivals", "Same Country", "Same Interests", "Nearby"];
-
-const FIND_FRIENDS = [
-  {
-    _id: "ff1",
-    fullName: "Kwame Osei",
-    originCountry: "Ghana",
-    originFlag: "🇬🇭",
-    currentCity: "Accra",
-    picturePath: "https://i.pravatar.cc/200?img=8",
-    interests: ["Food", "Music"],
-    contextLine: "Both in the Tech community",
-    isOnline: true,
-  },
-  {
-    _id: "ff2",
-    fullName: "Amina Hassan",
-    originCountry: "Kenya",
-    originFlag: "🇰🇪",
-    currentCity: "Accra",
-    picturePath: "https://i.pravatar.cc/200?img=29",
-    interests: ["Art", "Language Exchange"],
-    contextLine: "Also new to Accra",
-    isOnline: true,
-  },
-  {
-    _id: "ff3",
-    fullName: "Fatima Al-Rashid",
-    originCountry: "Lebanon",
-    originFlag: "🇱🇧",
-    currentCity: "Accra",
-    picturePath: "https://i.pravatar.cc/200?img=23",
-    interests: ["Food", "Cooking"],
-    contextLine: "Shared interest: Cooking",
-    isOnline: false,
-  },
-  {
-    _id: "ff4",
-    fullName: "Yuki Tanaka",
-    originCountry: "Japan",
-    originFlag: "🇯🇵",
-    currentCity: "Accra",
-    picturePath: "https://i.pravatar.cc/200?img=36",
-    interests: ["Language Exchange", "Art"],
-    contextLine: "Both learning Twi",
-    isOnline: true,
-  },
-];
 
 // ── Person card ────────────────────────────────────────────────────────────────
 function PersonCard({ person }) {
@@ -85,7 +39,7 @@ function PersonCard({ person }) {
       {/* Middle: online indicator + interest tags */}
       <View style={styles.tagsRow}>
         {person.isOnline && <View style={styles.onlineIndicator} />}
-        {person.interests.map((interest) => (
+        {(person.interests || []).map((interest) => (
           <View key={interest} style={styles.interestTag}>
             <Text style={styles.interestTagText}>{interest}</Text>
           </View>
@@ -115,15 +69,75 @@ function PersonCard({ person }) {
 // ── Find Friends Screen ────────────────────────────────────────────────────────
 export default function FindFriendsScreen() {
   const navigation = useNavigation();
+  const authCtx = useContext(AuthContext);
   const [selectedFilter, setSelectedFilter] = useState("New Arrivals");
+  const [people, setPeople] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [sourceLabel, setSourceLabel] = useState("remote");
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadNearby() {
+      setIsLoading(true);
+      const result = await fetchNearbyUsers({
+        searchText: "",
+        maxResults: 50,
+        currentUser: authCtx.userData || {},
+      });
+
+      if (!active) {
+        return;
+      }
+
+      if (result.ok) {
+        setPeople(result.data);
+        setSourceLabel(result.source || "remote");
+      } else {
+        setPeople([]);
+      }
+      setIsLoading(false);
+    }
+
+    loadNearby();
+
+    return () => {
+      active = false;
+    };
+  }, [authCtx.userData]);
+
+  const filteredPeople = useMemo(() => {
+    const currentUser = authCtx.userData || {};
+    const currentInterests = new Set((currentUser.interests || []).map((item) => item.toLowerCase()));
+
+    if (selectedFilter === "Same Country") {
+      return people.filter((person) => person.originCountry === currentUser.originCountry);
+    }
+
+    if (selectedFilter === "Same Interests") {
+      return people.filter((person) =>
+        (person.interests || []).some((interest) => currentInterests.has(String(interest).toLowerCase()))
+      );
+    }
+
+    if (selectedFilter === "Nearby") {
+      return [...people].sort((a, b) => Number(b.rankingScore || 0) - Number(a.rankingScore || 0));
+    }
+
+    if (selectedFilter === "New Arrivals") {
+      return [...people].sort((a, b) => Number(b.arrivalYear || 0) - Number(a.arrivalYear || 0));
+    }
+
+    return people;
+  }, [authCtx.userData, people, selectedFilter]);
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={KULA.cream} />
 
       <FlatList
-        data={FIND_FRIENDS}
-        keyExtractor={(item) => item._id}
+        data={filteredPeople}
+        keyExtractor={(item) => String(item._id || item.id)}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={() => (
@@ -158,10 +172,19 @@ export default function FindFriendsScreen() {
             </ScrollView>
 
             <View style={{ height: 16 }} />
+            <Text style={styles.metaText}>
+              {isLoading
+                ? "Loading nearby people..."
+                : "Showing " + sourceLabel + " discovery results"}
+            </Text>
+            <View style={{ height: 8 }} />
           </>
         )}
         renderItem={({ item }) => <PersonCard person={item} />}
         ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
+        ListEmptyComponent={
+          !isLoading ? <Text style={styles.emptyText}>No people found right now.</Text> : null
+        }
       />
 
       <FAB onPress={() => navigation.navigate("DiscoverScreen")} icon="compass-outline" />
@@ -188,6 +211,8 @@ const styles = StyleSheet.create({
   filterPillActive: { backgroundColor: KULA.teal, borderColor: KULA.teal },
   filterText: { fontSize: 14, fontWeight: "600", color: KULA.brown },
   filterTextActive: { color: KULA.white },
+  metaText: { fontSize: 12, color: KULA.muted, paddingHorizontal: 2 },
+  emptyText: { fontSize: 14, color: KULA.muted, textAlign: "center", marginTop: 24 },
 
   // Person card
   personCard: {

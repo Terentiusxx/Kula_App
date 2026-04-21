@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -14,76 +14,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { KULA } from "../constants/Styles";
 import FAB from "../components/UI/FAB";
 import { useNavigation } from "@react-navigation/native";
+import { fetchWisdomPosts } from "../services/repositories/wisdomRepository";
 
 // ── Mock data ──────────────────────────────────────────────────────────────────
 const CATEGORIES = ["All", "Housing", "Transport", "Culture", "Jobs", "Health"];
-
-const WISDOM_POSTS = [
-  {
-    _id: "w1",
-    question: "Best areas for expats to live in Accra?",
-    authorName: "Sarah Chen",
-    authorPic: "https://i.pravatar.cc/100?img=44",
-    timeAgo: "2h ago",
-    category: "Housing",
-    likes: 42,
-    answerCount: 8,
-    topAnswer: {
-      authorName: "Kofi Mensah",
-      badge: "Local Expert",
-      text:
-        "I recommend East Legon, Cantonments, or Airport Residential. They're safe, well-connected, and have good amenities. East Legon has the best mix of restaurants and shops.",
-    },
-  },
-  {
-    _id: "w2",
-    question: "How to get a local SIM card and data plan?",
-    authorName: "Ahmed Hassan",
-    authorPic: "https://i.pravatar.cc/100?img=53",
-    timeAgo: "5h ago",
-    category: "Transport",
-    likes: 28,
-    answerCount: 5,
-    topAnswer: {
-      authorName: "Amara Okafor",
-      badge: "Community Member",
-      text:
-        "MTN and Vodafone are the best options. Head to any of their retail stores with your passport for instant activation. MTN has the widest coverage across Accra.",
-    },
-  },
-  {
-    _id: "w3",
-    question: "What's the etiquette for greeting locals in Ghana?",
-    authorName: "Yuki Tanaka",
-    authorPic: "https://i.pravatar.cc/100?img=36",
-    timeAgo: "1d ago",
-    category: "Culture",
-    likes: 67,
-    answerCount: 14,
-    topAnswer: {
-      authorName: "Fatima Al-Rashid",
-      badge: "Local Expert",
-      text:
-        "Always greet before getting into business. A friendly 'Good morning/afternoon' goes a long way. Handshakes are common; with elders, a slight bow shows respect.",
-    },
-  },
-  {
-    _id: "w4",
-    question: "Best co-working spaces in Accra for remote workers?",
-    authorName: "Elena Vasquez",
-    authorPic: "https://i.pravatar.cc/100?img=29",
-    timeAgo: "2d ago",
-    category: "Jobs",
-    likes: 35,
-    answerCount: 9,
-    topAnswer: {
-      authorName: "Kofi Asante",
-      badge: "Local Expert",
-      text:
-        "Impact Hub at Airport City is top-tier. Regus at The Octagon and iSpace in Osu are also great. Most offer day passes around 80–120 GHS.",
-    },
-  },
-];
 
 // ── Question card ──────────────────────────────────────────────────────────────
 function WisdomCard({ post }) {
@@ -151,11 +85,42 @@ function WisdomCard({ post }) {
 export default function WisdomBoardScreen() {
   const navigation = useNavigation();
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const [wisdomPosts, setWisdomPosts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadWisdomPosts() {
+      setIsLoading(true);
+      setLoadError("");
+      const result = await fetchWisdomPosts({ maxResults: 60 });
+
+      if (!active) {
+        return;
+      }
+
+      if (result.ok) {
+        setWisdomPosts(result.data || []);
+      } else {
+        setWisdomPosts([]);
+        setLoadError("Could not load wisdom posts right now.");
+      }
+      setIsLoading(false);
+    }
+
+    loadWisdomPosts();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const filtered =
     selectedCategory === "All"
-      ? WISDOM_POSTS
-      : WISDOM_POSTS.filter((p) => p.category === selectedCategory);
+      ? wisdomPosts
+      : wisdomPosts.filter((p) => p.category === selectedCategory);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -208,6 +173,15 @@ export default function WisdomBoardScreen() {
         )}
         renderItem={({ item }) => <WisdomCard post={item} />}
         ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
+        ListEmptyComponent={
+          <View style={styles.emptyWrap}>
+            <Text style={styles.emptyText}>
+              {isLoading
+                ? "Loading wisdom posts..."
+                : loadError || "No wisdom posts available yet."}
+            </Text>
+          </View>
+        }
       />
 
       <FAB onPress={() => {}} icon="add-outline" />
@@ -332,5 +306,15 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: KULA.brown,
     lineHeight: 21,
+  },
+  emptyWrap: {
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    alignItems: "center",
+  },
+  emptyText: {
+    fontSize: 14,
+    color: KULA.muted,
+    textAlign: "center",
   },
 });

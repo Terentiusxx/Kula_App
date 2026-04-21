@@ -2,7 +2,20 @@ import { StyleSheet, Text, View } from "react-native";
 import React from "react";
 import { KULA } from "../../constants/Styles";
 
-const ChatCard = ({ sender }) => {
+function formatTime(value) {
+  if (!value) {
+    return "12:00 AM";
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "12:00 AM";
+  }
+
+  return parsed.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+const ChatCard = ({ sender, text, time }) => {
   return (
     <View
       style={[
@@ -19,10 +32,10 @@ const ChatCard = ({ sender }) => {
 
       <View style={[styles.bubble, sender ? styles.received : styles.sent]}>
         <Text style={sender ? styles.textReceived : styles.textSent}>
-          Hey! Are you joining the community meetup this weekend?
+          {text || ""}
         </Text>
         <Text style={[styles.time, sender ? styles.timeReceived : styles.timeSent]}>
-          12:00 AM
+          {formatTime(time)}
         </Text>
       </View>
     </View>

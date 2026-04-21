@@ -1,5 +1,5 @@
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import React, { useContext, useEffect, useState } from "react";
+import { AppState, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import Button from "../components/Button";
 import InputField from "../components/InputField";
 import { DEFAULT_DP, GlobalStyles } from "../constants/Styles";
@@ -10,6 +10,7 @@ import { getFilename } from "../utils/helperFunctions";
 import ProgressOverlay from "../components/ProgressOverlay";
 import ErrorOverlay from "../components/ErrorOverlay";
 import PressEffect from "../components/UI/PressEffect";
+import { getUiState, upsertUiState } from "../services/localdb/cacheRepository";
 
 const EditProfileScreen = ({ navigation, route }) => {
   const authCtx = useContext(AuthContext);
@@ -30,6 +31,8 @@ const EditProfileScreen = ({ navigation, route }) => {
     progress: 0,
     success: true,
   });
+  const draftKey = "draft:edit_profile";
+  const draftRef = useRef({ profilePic: "", userData: {} });
 
   async function updateBtnHandler() {
     const filenameData = getFilename(profilePic);
@@ -54,6 +57,17 @@ const EditProfileScreen = ({ navigation, route }) => {
         return { ...prevData, status: true };
       });
       setTimeout(() => {
+        upsertUiState(draftKey, {
+          profilePic: "",
+          userData: {
+            fullName: userData.fullName,
+            username: userData.username,
+            bio: userData.bio,
+            email: userData.email,
+            occupation: userData.occupation,
+          },
+          updatedAt: Date.now(),
+        });
         setUploading({ status: false, progress: 0, success: true });
         navigation.goBack();
       }, 3000);
@@ -69,6 +83,34 @@ const EditProfileScreen = ({ navigation, route }) => {
       headerShown: true,
       title: "Edit Profile",
     });
+  }, []);
+
+  useEffect(() => {
+    draftRef.current = { profilePic, userData };
+  }, [profilePic, userData]);
+
+  useEffect(() => {
+    const saved = getUiState(draftKey);
+    if (saved.ok && saved.data?.payload) {
+      const draft = saved.data.payload;
+      if (draft.profilePic) {
+        setProfilePic(draft.profilePic);
+      }
+      if (draft.userData) {
+        setUserData((prev) => ({ ...prev, ...draft.userData }));
+      }
+    }
+
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "background" || state === "inactive") {
+        upsertUiState(draftKey, { ...draftRef.current, updatedAt: Date.now() });
+      }
+    });
+
+    return () => {
+      upsertUiState(draftKey, { ...draftRef.current, updatedAt: Date.now() });
+      appStateSubscription?.remove?.();
+    };
   }, []);
   return (
     <View style={styles.container}>

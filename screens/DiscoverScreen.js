@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -15,54 +15,24 @@ import { Ionicons } from "@expo/vector-icons";
 import { KULA } from "../constants/Styles";
 import FAB from "../components/UI/FAB";
 import { useNavigation } from "@react-navigation/native";
+import OfflineBanner from "../components/UI/OfflineBanner";
+import { AuthContext } from "../store/auth-context";
+import {
+  fetchNearbyUsers,
+  loadCachedNearbyUsers,
+} from "../services/repositories/discoveryRepository";
+import {
+  fetchUserEventMemberships,
+  joinEvent,
+} from "../services/repositories/eventsRepository";
+import {
+  fetchUserMemberships,
+  joinCommunity,
+} from "../services/repositories/communityRepository";
+import { useResponsiveMetrics } from "../hooks/useResponsiveMetrics";
 
 // ── Mock data ──────────────────────────────────────────────────────────────────
 const CATEGORIES = ["All", "People", "Events", "Food", "Communities"];
-
-const DISCOVER_ITEMS = [
-  {
-    _id: "d1",
-    title: "Jollof Rice Festival",
-    category: "Food",
-    distance: "1.2 km",
-    image: "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=200&q=80",
-  },
-  {
-    _id: "d2",
-    title: "Tech Newcomers Accra",
-    category: "Community",
-    distance: "0.5 km",
-    image: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=200&q=80",
-  },
-  {
-    _id: "d3",
-    title: "Mama Oliech Restaurant",
-    category: "Food",
-    distance: "2.3 km",
-    image: "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=200&q=80",
-  },
-  {
-    _id: "d4",
-    title: "Language Exchange Meetup",
-    category: "Event",
-    distance: "0.8 km",
-    image: "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=200&q=80",
-  },
-  {
-    _id: "d5",
-    title: "Kofi Asante",
-    category: "People",
-    distance: "1.0 km",
-    image: "https://i.pravatar.cc/200?img=12",
-  },
-  {
-    _id: "d6",
-    title: "Accra Music Scene",
-    category: "Community",
-    distance: "3.1 km",
-    image: "https://images.unsplash.com/photo-1470229722913-7c0e2dbbafd3?w=200&q=80",
-  },
-];
 
 const CATEGORY_COLORS = {
   Food: "#FDEEE6",
@@ -79,9 +49,10 @@ const CATEGORY_TEXT = {
 };
 
 // ── Result row ─────────────────────────────────────────────────────────────────
-function DiscoverRow({ item }) {
+function DiscoverRow({ item, isJoined, onJoin }) {
   const bgColor = CATEGORY_COLORS[item.category] ?? KULA.cream;
   const textColor = CATEGORY_TEXT[item.category] ?? KULA.brown;
+  const isJoinable = item.category === "Community" || item.category === "Event";
 
   return (
     <TouchableOpacity style={styles.resultRow} activeOpacity={0.75}>
@@ -97,6 +68,17 @@ function DiscoverRow({ item }) {
           <Ionicons name="location-outline" size={12} color={KULA.muted} />
           <Text style={styles.resultDistance}>{item.distance}</Text>
         </View>
+        {isJoinable ? (
+          <TouchableOpacity
+            style={[styles.joinBtn, isJoined && styles.joinBtnActive]}
+            onPress={() => onJoin(item)}
+            disabled={isJoined}
+          >
+            <Text style={[styles.joinBtnText, isJoined && styles.joinBtnTextActive]}>
+              {isJoined ? "Joined" : "Join"}
+            </Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
     </TouchableOpacity>
   );
@@ -105,11 +87,116 @@ function DiscoverRow({ item }) {
 // ── Discover Screen ────────────────────────────────────────────────────────────
 export default function DiscoverScreen() {
   const navigation = useNavigation();
+  const authCtx = useContext(AuthContext);
   const [search, setSearch] = useState("");
   const [selectedCat, setSelectedCat] = useState("All");
   const [viewMode, setViewMode] = useState("list");
+  const [joinedCommunities, setJoinedCommunities] = useState([]);
+  const [joinedEvents, setJoinedEvents] = useState([]);
+  const [discoverItems, setDiscoverItems] = useState([]);
+  const { scaleFont } = useResponsiveMetrics();
 
-  const filtered = DISCOVER_ITEMS.filter((item) => {
+  const userId = authCtx.userData?._id || authCtx.userData?.id;
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadMemberships() {
+      if (!userId) {
+        return;
+      }
+
+      const [communityResult, eventResult] = await Promise.all([
+        fetchUserMemberships(userId, 200),
+        fetchUserEventMemberships(userId, 200),
+      ]);
+
+      if (!active) {
+        return;
+      }
+
+      if (communityResult.ok) {
+        setJoinedCommunities(
+          communityResult.data.map((item) => item.communityId).filter((id) => Boolean(id))
+        );
+      }
+
+      if (eventResult.ok) {
+        setJoinedEvents(eventResult.data.map((item) => item.eventId).filter((id) => Boolean(id)));
+      }
+    }
+
+    loadMemberships();
+
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadDiscoverItems() {
+      const result = await fetchNearbyUsers({
+        searchText: "",
+        maxResults: 100,
+        currentUser: authCtx.userData || {},
+      });
+
+      if (!active) {
+        return;
+      }
+
+      const sourceItems =
+        result.ok && Array.isArray(result.data) && result.data.length > 0
+          ? result.data
+          : loadCachedNearbyUsers(100, { currentUser: authCtx.userData || {} }).data || [];
+
+      const mapped = sourceItems.map((item, index) => {
+        const category = index % 2 === 0 ? "People" : "Community";
+        return {
+          _id: String(item._id || item.id || "discover-" + index),
+          title: item.fullName || item.title || item.username || "Discover",
+          category,
+          distance: "Nearby",
+          image:
+            item.picturePath ||
+            item.image ||
+            "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=200&q=80",
+        };
+      });
+
+      setDiscoverItems(mapped);
+    }
+
+    loadDiscoverItems();
+    return () => {
+      active = false;
+    };
+  }, [authCtx.userData]);
+
+  async function handleJoin(item) {
+    if (!userId) {
+      return;
+    }
+
+    if (item.category === "Community") {
+      const result = await joinCommunity({ userId, communityId: item._id });
+      if (result.ok) {
+        setJoinedCommunities((prev) => (prev.includes(item._id) ? prev : [...prev, item._id]));
+      }
+      return;
+    }
+
+    if (item.category === "Event") {
+      const result = await joinEvent({ userId, eventId: item._id });
+      if (result.ok) {
+        setJoinedEvents((prev) => (prev.includes(item._id) ? prev : [...prev, item._id]));
+      }
+    }
+  }
+
+  const filtered = discoverItems.filter((item) => {
     const matchesCat =
       selectedCat === "All" ||
       item.category.toLowerCase() === selectedCat.toLowerCase() ||
@@ -123,6 +210,7 @@ export default function DiscoverScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={KULA.cream} />
+      <OfflineBanner />
 
       <FlatList
         data={filtered}
@@ -133,14 +221,14 @@ export default function DiscoverScreen() {
           <>
             {/* Title */}
             <View style={styles.header}>
-              <Text style={styles.heading}>Discover</Text>
+              <Text style={[styles.heading, { fontSize: scaleFont(26, 22, 30) }]}>Discover</Text>
             </View>
 
             {/* Search bar */}
             <View style={styles.searchBar}>
               <Ionicons name="search-outline" size={18} color={KULA.muted} />
               <TextInput
-                style={styles.searchInput}
+                style={[styles.searchInput, { fontSize: scaleFont(15, 13, 17) }]}
                 placeholder="Search people, events, food..."
                 placeholderTextColor={KULA.muted}
                 value={search}
@@ -161,10 +249,7 @@ export default function DiscoverScreen() {
                   onPress={() => setSelectedCat(cat)}
                 >
                   <Text
-                    style={[
-                      styles.catPillText,
-                      selectedCat === cat && styles.catPillTextActive,
-                    ]}
+                    style={[styles.catPillText, { fontSize: scaleFont(14, 12, 16) }, selectedCat === cat && styles.catPillTextActive]}
                   >
                     {cat}
                   </Text>
@@ -183,12 +268,7 @@ export default function DiscoverScreen() {
                   size={15}
                   color={viewMode === "list" ? KULA.white : KULA.brown}
                 />
-                <Text
-                  style={[
-                    styles.toggleText,
-                    viewMode === "list" && styles.toggleTextActive,
-                  ]}
-                >
+                <Text style={[styles.toggleText, { fontSize: scaleFont(14, 12, 16) }, viewMode === "list" && styles.toggleTextActive]}>
                   List
                 </Text>
               </TouchableOpacity>
@@ -201,12 +281,7 @@ export default function DiscoverScreen() {
                   size={15}
                   color={viewMode === "map" ? KULA.white : KULA.brown}
                 />
-                <Text
-                  style={[
-                    styles.toggleText,
-                    viewMode === "map" && styles.toggleTextActive,
-                  ]}
-                >
+                <Text style={[styles.toggleText, { fontSize: scaleFont(14, 12, 16) }, viewMode === "map" && styles.toggleTextActive]}>
                   Map
                 </Text>
               </TouchableOpacity>
@@ -217,7 +292,17 @@ export default function DiscoverScreen() {
         )}
         renderItem={({ item, index }) => (
           <View>
-            <DiscoverRow item={item} />
+            <DiscoverRow
+              item={item}
+              isJoined={
+                item.category === "Community"
+                  ? joinedCommunities.includes(item._id)
+                  : item.category === "Event"
+                    ? joinedEvents.includes(item._id)
+                    : false
+              }
+              onJoin={handleJoin}
+            />
             {index < filtered.length - 1 && <View style={styles.divider} />}
           </View>
         )}
@@ -317,5 +402,25 @@ const styles = StyleSheet.create({
   resultBadgeText: { fontSize: 12, fontWeight: "600" },
   resultLocation: { flexDirection: "row", alignItems: "center", gap: 4 },
   resultDistance: { fontSize: 12, color: KULA.muted },
+  joinBtn: {
+    alignSelf: "flex-start",
+    marginTop: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: KULA.teal,
+  },
+  joinBtnActive: {
+    backgroundColor: KULA.teal,
+  },
+  joinBtnText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: KULA.teal,
+  },
+  joinBtnTextActive: {
+    color: KULA.white,
+  },
   divider: { height: 1, backgroundColor: KULA.border, marginLeft: 114 },
 });

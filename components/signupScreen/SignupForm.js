@@ -1,16 +1,20 @@
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from "react-native";
-import React from "react";
+import React, { useContext, useState } from "react";
 import { Formik } from "formik";
 import * as yup from "yup";
 import Validator from "email-validator";
-import { Ionicons } from "@expo/vector-icons";
 
 import Button from "../Button";
 import InputField from "../InputField";
 import { KULA } from "../../constants/Styles";
+import { AuthContext } from "../../store/auth-context";
 
 const SignupForm = ({ navigation }) => {
+  const authCtx = useContext(AuthContext);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const SignupFormSchema = yup.object().shape({
+    fullname: yup.string().min(2, "Full name must contain at least 2 characters."),
     email: yup.string().email().required("Email address is required."),
     password: yup.string().min(8, "Password must have at least 8 characters."),
     username: yup
@@ -20,20 +24,22 @@ const SignupForm = ({ navigation }) => {
   });
 
   const onSignup = async (email, password, username, fullname) => {
-    try {
-      const formData = {
-        fullName: fullname,
-        username,
-        email,
-        password,
-        picturePath: "",
-        friends: [],
-        occupation: "",
-        bio: "Edit Bio",
-      };
-      navigation.replace("LoginScreen");
-    } catch (error) {
-      Alert.alert("Sign up failed", error?.response?.data?.msg ?? "Something went wrong.");
+    if (isSubmitting) {
+      return;
+    }
+    setIsSubmitting(true);
+    const registerResult = await authCtx.register({
+      email: String(email || "").trim().toLowerCase(),
+      password: String(password || "").trim(),
+      displayName: String(fullname || username || "").trim(),
+    });
+    setIsSubmitting(false);
+
+    if (!registerResult.ok) {
+      Alert.alert(
+        "Sign up failed",
+        registerResult.error?.message || "Something went wrong."
+      );
     }
   };
 
@@ -125,7 +131,7 @@ const SignupForm = ({ navigation }) => {
               <Button
                 title="Create account"
                 onPress={handleSubmit}
-                disabled={!isValid}
+                disabled={!isValid || isSubmitting}
                 containerStyle={styles.cta}
               />
             </View>

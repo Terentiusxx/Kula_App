@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -14,55 +14,11 @@ import { Ionicons } from "@expo/vector-icons";
 import { KULA } from "../constants/Styles";
 import FAB from "../components/UI/FAB";
 import { useNavigation } from "@react-navigation/native";
-
-// ── Mock message threads ───────────────────────────────────────────────────────
-const THREADS = [
-  {
-    _id: "t1",
-    contactName: "Kofi Mensah",
-    preview: "See you at the food meetup!",
-    timestamp: "2m ago",
-    unread: 2,
-    image: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=200&q=80",
-    isGroup: false,
-  },
-  {
-    _id: "t2",
-    contactName: "Tech Newcomers",
-    preview: "Sarah: Anyone tried the new co-working space?",
-    timestamp: "1h ago",
-    unread: 0,
-    image: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=200&q=80",
-    isGroup: true,
-  },
-  {
-    _id: "t3",
-    contactName: "Amara Okafor",
-    preview: "Thanks for the restaurant recommendation!",
-    timestamp: "3h ago",
-    unread: 0,
-    image: "https://i.pravatar.cc/200?img=47",
-    isGroup: false,
-  },
-  {
-    _id: "t4",
-    contactName: "Fatima Al-Rashid",
-    preview: "The kibbeh recipe is on its way 📩",
-    timestamp: "Yesterday",
-    unread: 1,
-    image: "https://i.pravatar.cc/200?img=23",
-    isGroup: false,
-  },
-  {
-    _id: "t5",
-    contactName: "Food Lovers GH",
-    preview: "Priya: Anyone joining the cooking class tonight?",
-    timestamp: "Yesterday",
-    unread: 0,
-    image: "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=200&q=80",
-    isGroup: true,
-  },
-];
+import { AuthContext } from "../store/auth-context";
+import {
+  fetchThreads,
+  loadCachedThreads,
+} from "../services/repositories/messagesRepository";
 
 // ── Thread row ─────────────────────────────────────────────────────────────────
 function ThreadRow({ thread }) {
@@ -70,7 +26,7 @@ function ThreadRow({ thread }) {
   return (
     <TouchableOpacity
       style={styles.row}
-      onPress={() => navigation.navigate("ChatScreen")}
+      onPress={() => navigation.navigate("ChatScreen", { chatId: thread._id, contactName: thread.contactName })}
       activeOpacity={0.7}
     >
       {/* Avatar + unread badge */}
@@ -100,9 +56,60 @@ function ThreadRow({ thread }) {
 // ── Messages Screen ────────────────────────────────────────────────────────────
 export default function MessagesScreen() {
   const navigation = useNavigation();
+  const authCtx = useContext(AuthContext);
   const [search, setSearch] = useState("");
+  const [threads, setThreads] = useState([]);
 
-  const filtered = THREADS.filter(
+  useEffect(() => {
+    let active = true;
+
+    async function loadThreads() {
+      const userId = authCtx.userData?._id || authCtx.userData?.id;
+      if (!userId) {
+        return;
+      }
+
+      const remoteResult = await fetchThreads(userId, 100);
+      if (active && remoteResult.ok && remoteResult.data.length > 0) {
+        const mapped = remoteResult.data.map((item) => ({
+          _id: item.id || item._id,
+          contactName: item.title || item.name || "Chat",
+          preview: item.lastMessageText || "Open chat",
+          timestamp: "Now",
+          unread: Number(item.unreadCount || 0),
+          image:
+            item.image ||
+            "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=200&q=80",
+          isGroup: Boolean(item.isGroup),
+        }));
+        setThreads(mapped);
+        return;
+      }
+
+      const cachedResult = loadCachedThreads(100);
+      if (active && cachedResult.ok && cachedResult.data.length > 0) {
+        const mapped = cachedResult.data.map((item) => ({
+          _id: item.id,
+          contactName: item.payload?.title || item.payload?.name || "Chat",
+          preview: item.payload?.lastMessageText || "Open chat",
+          timestamp: "Now",
+          unread: Number(item.payload?.unreadCount || 0),
+          image:
+            item.payload?.image ||
+            "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=200&q=80",
+          isGroup: Boolean(item.payload?.isGroup),
+        }));
+        setThreads(mapped);
+      }
+    }
+
+    loadThreads();
+    return () => {
+      active = false;
+    };
+  }, [authCtx.userData]);
+
+  const filtered = threads.filter(
     (t) =>
       t.contactName.toLowerCase().includes(search.toLowerCase()) ||
       t.preview.toLowerCase().includes(search.toLowerCase())

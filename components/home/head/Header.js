@@ -1,11 +1,47 @@
-import React from "react";
+import React, { useContext, useEffect, useState } from "react";
 import { Text, View, StyleSheet, Pressable } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { KULA } from "../../../constants/Styles";
 import PressEffect from "../../UI/PressEffect";
+import { AuthContext } from "../../../store/auth-context";
+import { fetchNotificationsForUser } from "../../../services/repositories/notificationsRepository";
 
-const Header = ({ navigation }) => (
-  <View style={styles.container}>
+const Header = ({ navigation }) => {
+  const authCtx = useContext(AuthContext);
+  const [notificationsCount, setNotificationsCount] = useState(0);
+  const userId = authCtx.userData?._id || authCtx.userData?.id;
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadNotificationCount() {
+      if (!userId) {
+        if (active) {
+          setNotificationsCount(0);
+        }
+        return;
+      }
+
+      const result = await fetchNotificationsForUser(userId, { maxResults: 99 });
+      if (!active) {
+        return;
+      }
+
+      if (result.ok && Array.isArray(result.data)) {
+        setNotificationsCount(result.data.length);
+      } else {
+        setNotificationsCount(0);
+      }
+    }
+
+    loadNotificationCount();
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
+  return (
+    <View style={styles.container}>
     {/* Avatar placeholder — coloured initials circle */}
     <Pressable
       onPress={() => navigation.navigate("UserProfileScreen")}
@@ -40,14 +76,14 @@ const Header = ({ navigation }) => (
         >
           <View>
             <Ionicons name="notifications-outline" size={22} color={KULA.brown} />
-            {/* Unread dot */}
-            <View style={styles.notifDot} />
+            {notificationsCount > 0 ? <View style={styles.notifDot} /> : null}
           </View>
         </Pressable>
       </PressEffect>
     </View>
-  </View>
-);
+    </View>
+  );
+};
 
 export default Header;
 

@@ -7,6 +7,7 @@ import { Video } from "expo-av";
 import * as ImagePicker from "expo-image-picker";
 import { useState, useEffect, useRef, useContext } from "react";
 import { Pressable, StyleSheet, Text, View, Modal } from "react-native";
+import { Linking } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Ionicons } from "@expo/vector-icons";
@@ -54,6 +55,10 @@ function CameraScreen({ showCamera, setShowCamera, getPost, mode, setExit }) {
   }
 
   if (!permission.granted || !audioPermission.granted) {
+    const canAskCamera = permission?.canAskAgain !== false;
+    const canAskMicrophone = audioPermission?.canAskAgain !== false;
+    const canAskAgain = canAskCamera || canAskMicrophone;
+
     // Camera permissions are not granted yet
     return (
       <Modal
@@ -72,16 +77,35 @@ function CameraScreen({ showCamera, setShowCamera, getPost, mode, setExit }) {
         <View style={styles.permission}>
           <View style={styles.permissionContainer}>
             <Text style={styles.permissionText}>
-              We need your Permission to use Camera
+              We need camera and microphone permission to continue.
             </Text>
-            <Pressable
-              onPress={() => {
-                requestPermission();
-                requestAudioPermission();
-              }}
-            >
-              <Text style={styles.permissionBtn}>{"Grant Permission"}</Text>
-            </Pressable>
+            {canAskAgain ? (
+              <Pressable
+                onPress={async () => {
+                  try {
+                    await requestPermission();
+                    await requestAudioPermission();
+                  } catch (_error) {
+                    // Keep user on safe permission UI state when permission APIs fail.
+                  }
+                }}
+              >
+                <Text style={styles.permissionBtn}>{"Grant Permission"}</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                onPress={() => {
+                  Linking.openSettings();
+                }}
+              >
+                <Text style={styles.permissionBtn}>{"Open Settings"}</Text>
+              </Pressable>
+            )}
+            {!canAskAgain ? (
+              <Text style={styles.permissionSubText}>
+                Permission is blocked. Enable camera and microphone in device settings.
+              </Text>
+            ) : null}
           </View>
         </View>
       </Modal>
@@ -275,6 +299,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginHorizontal: 20,
     color: "white",
+  },
+  permissionSubText: {
+    textAlign: "center",
+    marginTop: 10,
+    marginHorizontal: 20,
+    fontSize: 14,
+    color: "rgba(255,255,255,0.8)",
   },
   permissionBtn: {
     backgroundColor: GlobalStyles.colors.blue,

@@ -1,4 +1,5 @@
 import {
+  AppState,
   View,
   StyleSheet,
   Dimensions,
@@ -7,7 +8,7 @@ import {
   KeyboardAvoidingView,
 } from "react-native";
 
-import React, { useContext, useEffect, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import { GlobalStyles } from "../constants/Styles";
 import Button from "../components/Button";
 import InputField from "../components/InputField";
@@ -20,6 +21,7 @@ import ErrorOverlay from "../components/ErrorOverlay";
 import UploadIcon from "../assets/UploadIcon";
 import { Platform } from "react-native";
 import { StatusBar } from "expo-status-bar";
+import { getUiState, upsertUiState } from "../services/localdb/cacheRepository";
 
 const { width, height } = Dimensions.get("window");
 const PLACEHOLDER_IMAGE =
@@ -32,6 +34,8 @@ function NewPostScreen({ navigation, route }) {
   const [resizeModeCover, setResizeModeCover] = useState(true);
   const [showCamera, setShowCamera] = useState(true);
   const [caption, setCaption] = useState("");
+  const draftKey = "draft:new_post";
+  const draftRef = useRef({ caption: "", post: null, type: null });
 
   const [uploading, setUploading] = useState({
     status: false,
@@ -51,6 +55,36 @@ function NewPostScreen({ navigation, route }) {
       setType(route?.params?.type);
     }
   }, [route?.params?.type]);
+
+  useEffect(() => {
+    draftRef.current = { caption, post, type };
+  }, [caption, post, type]);
+
+  useEffect(() => {
+    const saved = getUiState(draftKey);
+    if (saved.ok && saved.data?.payload) {
+      const draft = saved.data.payload;
+      setCaption(String(draft.caption || ""));
+      setPost(draft.post || null);
+      setType(draft.type || type);
+      draftRef.current = {
+        caption: String(draft.caption || ""),
+        post: draft.post || null,
+        type: draft.type || type,
+      };
+    }
+
+    const appStateSubscription = AppState.addEventListener("change", (state) => {
+      if (state === "background" || state === "inactive") {
+        upsertUiState(draftKey, { ...draftRef.current, updatedAt: Date.now() });
+      }
+    });
+
+    return () => {
+      upsertUiState(draftKey, { ...draftRef.current, updatedAt: Date.now() });
+      appStateSubscription?.remove?.();
+    };
+  }, []);
   async function newPostHandler() {
     if (post) {
       const filenameData = getFilename(post);
@@ -70,6 +104,12 @@ function NewPostScreen({ navigation, route }) {
           return { ...prevData, status: true };
         });
         setTimeout(() => {
+          upsertUiState(draftKey, {
+            caption: "",
+            post: null,
+            type: null,
+            updatedAt: Date.now(),
+          });
           setUploading({ status: false, progress: 0, success: true });
           navigation.goBack();
         }, 3000);

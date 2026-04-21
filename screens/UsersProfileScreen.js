@@ -10,10 +10,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { KULA } from "../constants/Styles";
 import FAB from "../components/UI/FAB";
-import { MOCK_USERS } from "../data/mockData";
 
 // ── Mock profile data for a visited user ──────────────────────────────────────
 const PROFILE_USER = {
@@ -43,8 +42,10 @@ function InterestTag({ label }) {
 // ── User Profile Screen ────────────────────────────────────────────────────────
 export default function UsersProfileScreen() {
   const navigation = useNavigation();
+  const route = useRoute();
   const [waved, setWaved] = useState(false);
-  const user = PROFILE_USER;
+  const routeUser = route?.params?.user;
+  const user = routeUser ? { ...PROFILE_USER, ...routeUser } : PROFILE_USER;
 
   return (
     <SafeAreaView style={styles.container}>

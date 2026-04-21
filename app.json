@@ -2,6 +2,7 @@
   "expo": {
     "name": "Social",
     "slug": "Social",
+    "scheme": "kula",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -14,7 +15,9 @@
     "updates": {
       "fallbackToCacheTimeout": 0
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true
     },
@@ -22,10 +25,14 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/noserdivers_logo_iupl55.png",
         "backgroundColor": "#262938"
-      }
+      },
+      "package": "com.anonymous.social"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
   }
 }

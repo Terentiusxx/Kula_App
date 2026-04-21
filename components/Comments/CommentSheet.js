@@ -8,7 +8,7 @@ import { FlatList } from "react-native-gesture-handler";
 import InputField from "../InputField";
 import EmojiInput from "../UI/EmojiInput";
 
-function CommentSheet({ visible, setVisible }) {
+function CommentSheet({ visible, setVisible, comments = [] }) {
   const [comment, setComment] = useState("");
   const actionSheetRef = useRef(null);
   useEffect(() => {
@@ -18,6 +18,19 @@ function CommentSheet({ visible, setVisible }) {
       actionSheetRef.current?.setModalVisible(false);
     }
   }, [visible]);
+
+  const normalizedComments = (comments || []).map((item, index) => ({
+    _id: String(item?._id || item?.id || "comment_" + index),
+    author: {
+      name: item?.author?.name || item?.authorName || "Community Member",
+      picturePath:
+        item?.author?.picturePath ||
+        item?.authorPicturePath ||
+        "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80",
+    },
+    text: item?.text || item?.message || "",
+    time: item?.time || "just now",
+  }));
 
   return (
     <View style={{ flex: 1 }}>
@@ -39,10 +52,10 @@ function CommentSheet({ visible, setVisible }) {
         }}
       >
         <FlatList
-          keyExtractor={(item, index) => index.toString()}
-          data={[1, 2, 3, 4, 5, 6, 7, 7, 8, 9, 5]}
+          keyExtractor={(item) => item._id}
+          data={normalizedComments}
           renderItem={({ item, index }) => {
-            return <CommentCard />;
+            return <CommentCard comment={item} />;
           }}
         />
         <View

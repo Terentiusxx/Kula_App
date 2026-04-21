@@ -6,16 +6,23 @@ import {
   TouchableOpacity,
   StyleSheet,
   Image,
-  Dimensions,
   ScrollView,
   StatusBar,
+  Linking,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { KULA } from "../constants/Styles";
 import { AuthContext } from "../store/auth-context";
-
-const { width, height } = Dimensions.get("window");
+import { useNavigation } from "@react-navigation/native";
+import {
+  getCurrentLocation,
+  getLocationPermissionState,
+  requestForegroundLocationPermission,
+  roundLocationCoordinates,
+} from "../services/location/locationService";
+import { saveUserDiscoveryLocation } from "../services/repositories/discoveryRepository";
 
 const INTERESTS = [
   "Food", "Sports", "Tech", "Music",
@@ -65,6 +72,7 @@ function SkipLink({ label = "Skip", onPress }) {
 // ── Main onboarding component ─────────────────────────────────────────────────
 export default function OnboardingScreen() {
   const authCtx = useContext(AuthContext);
+  const navigation = useNavigation();
   const [step, setStep] = useState(0);
 
   // Step 0 state
@@ -77,6 +85,11 @@ export default function OnboardingScreen() {
 
   // Step 2 state
   const [selectedInterests, setSelectedInterests] = useState([]);
+  const [locationStatus, setLocationStatus] = useState("idle");
+  const [locationMessage, setLocationMessage] = useState("");
+  const { width, height } = useWindowDimensions();
+  const cardWidth = Math.min(540, Math.max(300, width * 0.88));
+  const listMaxHeight = Math.min(280, Math.max(180, height * 0.3));
 
   const filteredCities = CITIES.filter((c) =>
     c.toLowerCase().includes(citySearch.toLowerCase())
@@ -87,8 +100,64 @@ export default function OnboardingScreen() {
     else finishOnboarding();
   }
 
-  function finishOnboarding() {
-    authCtx.authenticate("onboarding@kula.app", "mock");
+  async function finishOnboarding() {
+    await authCtx.markOnboardingComplete();
+    navigation.navigate("LoginScreen");
+  }
+
+  async function handleEnableLocation() {
+    if (locationStatus === "requesting") {
+      return;
+    }
+
+    setLocationStatus("requesting");
+    setLocationMessage("");
+
+    const permissionResult = await requestForegroundLocationPermission();
+    if (!permissionResult.ok) {
+      setLocationStatus("denied");
+      setLocationMessage("Location access could not be requested. You can continue without it.");
+      return;
+    }
+
+    const permissionState = getLocationPermissionState(permissionResult.data);
+    if (permissionState === "permanently_denied") {
+      setLocationStatus("permanently_denied");
+      setLocationMessage("Location is blocked for this app. Open settings to enable it.");
+      return;
+    }
+
+    if (permissionState === "denied") {
+      setLocationStatus("denied");
+      setLocationMessage("Location permission was denied. You can continue without it.");
+      return;
+    }
+
+    const locationResult = await getCurrentLocation();
+    if (!locationResult.ok) {
+      setLocationStatus("denied");
+      setLocationMessage("Location could not be captured right now. You can continue without it.");
+      return;
+    }
+
+    const rounded = roundLocationCoordinates(locationResult.data?.coords || {}, 3);
+    const locationPayload = {
+      ...rounded,
+      permission: "granted",
+    };
+
+    const userId = authCtx.userData?._id || authCtx.userData?.id;
+    if (userId) {
+      const saveResult = await saveUserDiscoveryLocation(userId, locationPayload);
+      if (!saveResult.ok) {
+        setLocationStatus("denied");
+        setLocationMessage("Location was captured but could not be saved. You can continue.");
+        return;
+      }
+    }
+
+    setLocationStatus("granted");
+    finishOnboarding();
   }
 
   function toggleInterest(interest) {
@@ -104,7 +173,7 @@ export default function OnboardingScreen() {
     return (
       <SafeAreaView style={styles.bg}>
         <StatusBar barStyle="dark-content" backgroundColor={KULA.cream} />
-        <View style={styles.card}>
+        <View style={[styles.card, { width: cardWidth }]}>
           <StepDots step={0} />
           <Image
             source={{
@@ -142,7 +211,7 @@ export default function OnboardingScreen() {
     return (
       <SafeAreaView style={styles.bg}>
         <StatusBar barStyle="dark-content" backgroundColor={KULA.cream} />
-        <View style={[styles.card, { maxHeight: height * 0.78 }]}>
+        <View style={[styles.card, { width: cardWidth, maxHeight: height * 0.78 }]}>
           <StepDots step={1} />
           <Text style={[styles.headline, styles.leftAlign, { marginTop: 32 }]}>
             Where are you now?
@@ -160,7 +229,7 @@ export default function OnboardingScreen() {
           />
 
           <ScrollView
-            style={{ marginTop: 14, maxHeight: 220 }}
+            style={{ marginTop: 14, maxHeight: listMaxHeight }}
             showsVerticalScrollIndicator={false}
           >
             {filteredCities.map((city) => (
@@ -199,7 +268,7 @@ export default function OnboardingScreen() {
     return (
       <SafeAreaView style={styles.bg}>
         <StatusBar barStyle="dark-content" backgroundColor={KULA.cream} />
-        <View style={styles.card}>
+        <View style={[styles.card, { width: cardWidth }]}>
           <StepDots step={2} />
           <Text style={[styles.headline, styles.leftAlign, { marginTop: 24 }]}>
             What are you into?
@@ -238,7 +307,7 @@ export default function OnboardingScreen() {
   return (
     <SafeAreaView style={styles.bg}>
       <StatusBar barStyle="dark-content" backgroundColor={KULA.cream} />
-      <View style={styles.card}>
+      <View style={[styles.card, { width: cardWidth }]}>
         <StepDots step={3} />
 
         <View style={styles.locationSection}>
@@ -254,7 +323,18 @@ export default function OnboardingScreen() {
           </Text>
         </View>
 
-        <CtaButton label="Enable Location" onPress={finishOnboarding} />
+        {locationStatus !== "idle" && locationStatus !== "granted" ? (
+          <Text style={styles.locationHint}>{locationMessage}</Text>
+        ) : null}
+
+        {locationStatus === "permanently_denied" ? (
+          <CtaButton label="Open Settings" onPress={() => Linking.openSettings()} />
+        ) : (
+          <CtaButton
+            label={locationStatus === "requesting" ? "Checking..." : "Enable Location"}
+            onPress={handleEnableLocation}
+          />
+        )}
         <SkipLink label="Maybe later" onPress={finishOnboarding} />
       </View>
     </SafeAreaView>
@@ -271,7 +351,6 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: KULA.white,
     borderRadius: 28,
-    width: width * 0.88,
     padding: 24,
     paddingBottom: 28,
     shadowColor: KULA.brown,
@@ -359,6 +438,13 @@ const styles = StyleSheet.create({
   locationSection: {
     alignItems: "center",
     paddingVertical: 48,
+  },
+  locationHint: {
+    textAlign: "center",
+    color: KULA.muted,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 4,
   },
   locationIcon: {
     width: 72,

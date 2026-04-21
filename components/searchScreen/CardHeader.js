@@ -1,11 +1,14 @@
 import * as React from "react";
 import { Pressable, Text, View, Image as Image } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { MOCK_USERS } from "../../data/mockData";
 import { GlobalStyles } from "../../constants/Styles";
 import PressEffect from "../UI/PressEffect";
 
-const CardHeader = ({ radius }) => {
+const CardHeader = ({ radius, user = {}, timeLabel = "recently" }) => {
+  const picturePath =
+    user.picturePath ||
+    "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80";
+  const username = user.username || user.fullName || "user";
   return (
     <View
       style={{
@@ -18,7 +21,7 @@ const CardHeader = ({ radius }) => {
     >
       <View style={{ flexDirection: "row" }}>
         <Image
-          source={{ uri: MOCK_USERS[0].picturePath }}
+          source={{ uri: picturePath }}
           style={{
             width: 50,
             height: 50,
@@ -33,11 +36,9 @@ const CardHeader = ({ radius }) => {
           }}
         >
           <Text style={{ color: "white", fontWeight: "600" }}>
-            {MOCK_USERS[0].username}
+            {username}
           </Text>
-          <Text style={{ color: "rgba(255,255,255,0.5)" }}>
-            {"2 hours ago"}
-          </Text>
+          <Text style={{ color: "rgba(255,255,255,0.5)" }}>{timeLabel}</Text>
         </View>
       </View>
       <PressEffect>

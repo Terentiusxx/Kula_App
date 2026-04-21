@@ -1,5 +1,5 @@
 import { Fragment, useContext, useEffect, useRef, useState } from "react";
-import { View, Pressable, StyleSheet, Image } from "react-native";
+import { View, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import Animated, {
   FadeIn,
   FadeOut,
@@ -10,9 +10,13 @@ import { GlobalStyles } from "../../constants/Styles";
 import TabBarSvg from "./TabBarSvg";
 import NewPostIcon from "./NewPostIcon";
 import { AppContext } from "../../store/app-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getTabBarMetrics } from "./tabBarMetrics";
 
 const TabBar = ({ state, descriptors, navigation }) => {
   const appCtx = useContext(AppContext);
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const screens = [
     {
       name: "HomeScreen",
@@ -41,8 +45,11 @@ const TabBar = ({ state, descriptors, navigation }) => {
       iconUnfocued: require("../../assets/explore.png"),
     },
   ];
-  const [tabBarHeight, setTabBarHeight] = useState(50);
+  const [tabBarHeight, setTabBarHeight] = useState(74);
   const [actionBtnPressed, setActionBtnPressed] = useState(false);
+  const metrics = getTabBarMetrics(width);
+  const centerButtonSize = metrics.buttonDiameter;
+  const centerOffset = metrics.notchDepth - metrics.buttonRadius;
 
   const activeTabScreen = state.routes[state.index].name;
   return (
@@ -67,15 +74,19 @@ const TabBar = ({ state, descriptors, navigation }) => {
         </Animated.View>
       )}
       <View style={{ zIndex: 10 }}>
-        <TabBarSvg height={tabBarHeight} />
+        <TabBarSvg
+          width={width}
+          height={tabBarHeight}
+        />
       </View>
       <View
         style={{
           flexDirection: "row",
           justifyContent: "space-between",
           alignItems: "center",
-          paddingHorizontal: 20,
-          paddingVertical: 5,
+          paddingHorizontal: Math.max(12, width * 0.04),
+          paddingTop: 6,
+          paddingBottom: Math.max(8, insets.bottom),
           backgroundColor: "transparent",
           position: "absolute",
           bottom: 0,
@@ -83,7 +94,7 @@ const TabBar = ({ state, descriptors, navigation }) => {
         }}
         onLayout={(e) => {
           setTabBarHeight(e.nativeEvent.layout.height);
-          appCtx.setTabBarHeight(e.nativeEvent.layout.height + 50);
+          appCtx.setTabBarHeight(e.nativeEvent.layout.height + centerButtonSize * 0.5 + 16);
         }}
       >
         {state.routes.map((route, index) => {
@@ -139,7 +150,7 @@ const TabBar = ({ state, descriptors, navigation }) => {
                       justifyContent: "center",
                       alignItems: "center",
                       flex: 1,
-                      padding: 15,
+                      paddingVertical: 12,
                     }}
                   >
                     <Animated.Image
@@ -147,8 +158,8 @@ const TabBar = ({ state, descriptors, navigation }) => {
                       resizeMode={"contain"}
                       style={[
                         {
-                          width: 25,
-                          height: 25,
+                          width: metrics.iconSize,
+                          height: metrics.iconSize,
                           position: "absolute",
                           tintColor: "#1D9E75",
                           overflow: "visible",
@@ -160,8 +171,8 @@ const TabBar = ({ state, descriptors, navigation }) => {
                       source={screenDef.iconUnfocued}
                       style={[
                         {
-                          width: 25,
-                          height: 25,
+                          width: metrics.iconSize,
+                          height: metrics.iconSize,
                           tintColor: "rgba(59,42,26,0.35)",
                           opacity: 1,
                         },
@@ -181,10 +192,12 @@ const TabBar = ({ state, descriptors, navigation }) => {
                 >
                   <View
                     style={{
-                      transform: [{ translateY: -(50 / 2 + 5) }],
+                      transform: [{ translateY: -centerOffset }],
                     }}
                   >
                     <NewPostIcon
+                      size={centerButtonSize}
+                      buttonRadius={metrics.buttonRadius}
                       exploreActive={activeTabScreen === "DiscoverScreen"}
                       pressed={actionBtnPressed}
                       setPressed={setActionBtnPressed}

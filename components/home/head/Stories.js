@@ -10,110 +10,15 @@ import {
   Animated,
   Dimensions,
 } from "react-native";
-import React, { useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigation } from "@react-navigation/native";
 import { GlobalStyles } from "../../../constants/Styles";
 import ImageStory from "../../story/ImageStory";
 import { Ionicons } from "@expo/vector-icons";
 import PressEffect from "../../UI/PressEffect";
+import { fetchNearbyUsers } from "../../../services/repositories/discoveryRepository";
 // https://github.com/birdwingo/react-native-instagram-stories?tab=readme-ov-file
 
-const data = [
-  {
-    user_id: 0,
-    user_image:
-      "https://p16.tiktokcdn.com/tos-maliva-avt-0068/2f134ee6b5d3a1340aeb0337beb48f2d~c5_720x720.jpeg",
-    user_name: "Ajmal",
-    active: false,
-    stories: [
-      {
-        story_id: 1,
-        story_image:
-          "https://image.freepik.com/free-vector/universe-mobile-wallpaper-with-planets_79603-600.jpg",
-      },
-    ],
-  },
-  {
-    user_id: 1,
-    user_image: "https://randomuser.me/api/portraits/women/2.jpg",
-    user_name: "Ajmal",
-    active: false,
-    stories: [
-      {
-        story_id: 1,
-        story_image:
-          "https://image.freepik.com/free-vector/universe-mobile-wallpaper-with-planets_79603-600.jpg",
-      },
-    ],
-  },
-  {
-    user_id: 2,
-    user_image: "https://randomuser.me/api/portraits/women/5.jpg",
-    user_name: "Ajmal",
-    stories: [
-      {
-        story_id: 1,
-        story_image:
-          "https://image.freepik.com/free-vector/universe-mobile-wallpaper-with-planets_79603-600.jpg",
-      },
-    ],
-  },
-  {
-    user_id: 3,
-    user_image: "https://randomuser.me/api/portraits/women/8.jpg",
-    user_name: "Ajmal",
-    active: true,
-
-    stories: [
-      {
-        story_id: 1,
-        story_image:
-          "https://image.freepik.com/free-vector/universe-mobile-wallpaper-with-planets_79603-600.jpg",
-      },
-    ],
-  },
-  {
-    user_id: 4,
-    user_image: "https://randomuser.me/api/portraits/women/10.jpg",
-    user_name: "Ajmal",
-    active: false,
-
-    stories: [
-      {
-        story_id: 1,
-        story_image:
-          "https://image.freepik.com/free-vector/universe-mobile-wallpaper-with-planets_79603-600.jpg",
-      },
-    ],
-  },
-  {
-    user_id: 5,
-    user_image: "https://randomuser.me/api/portraits/women/25.jpg",
-    user_name: "Ajmal",
-    active: false,
-
-    stories: [
-      {
-        story_id: 1,
-        story_image:
-          "https://image.freepik.com/free-vector/universe-mobile-wallpaper-with-planets_79603-600.jpg",
-      },
-    ],
-  },
-  {
-    user_id: 6,
-    user_image: "https://randomuser.me/api/portraits/women/52.jpg",
-    user_name: "Ajmal",
-    active: false,
-    stories: [
-      {
-        story_id: 1,
-        story_image:
-          "https://image.freepik.com/free-vector/universe-mobile-wallpaper-with-planets_79603-600.jpg",
-      },
-    ],
-  },
-];
 const { width: SCREEN_WIDTH } = Dimensions.get("screen");
 const ITEM_SIZE = SCREEN_WIDTH / 5;
 const TRANSLATE_VALUE = ITEM_SIZE / 2;
@@ -124,6 +29,70 @@ const Stories = ({ followingsData }) => {
   const [showStory, setShowStory] = useState(false);
   const ScrollX = useRef(new Animated.Value(0)).current;
   const navigation = useNavigation();
+  const [storyUsers, setStoryUsers] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadStoryUsers() {
+      if (Array.isArray(followingsData) && followingsData.length > 0) {
+        if (active) {
+          setStoryUsers(followingsData);
+        }
+        return;
+      }
+
+      const result = await fetchNearbyUsers({ maxResults: 8, currentUser: {} });
+      if (!active) {
+        return;
+      }
+      setStoryUsers(result.ok ? result.data || [] : []);
+    }
+
+    loadStoryUsers();
+    return () => {
+      active = false;
+    };
+  }, [followingsData]);
+
+  const data = useMemo(() => {
+    const addStoryCard = {
+      user_id: 0,
+      user_image:
+        "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80",
+      user_name: "Add",
+      active: false,
+      stories: [],
+    };
+
+    const mapped = (storyUsers || []).map((item, index) => ({
+      user_id: index + 1,
+      user_image:
+        item.picturePath ||
+        "https://images.unsplash.com/photo-1521572267360-ee0c2909d518?w=200&q=80",
+      user_name: item.username || item.fullName || "user",
+      active: index % 3 === 0,
+      stories: Array.isArray(item.stories)
+        ? item.stories.map((story, sIndex) => ({
+            story_id: sIndex + 1,
+            story_image:
+              story?.story_image ||
+              story?.image ||
+              "https://images.unsplash.com/photo-1493244040629-496f6d136cc3?w=600&q=80",
+          }))
+        : [
+            {
+              story_id: 1,
+              story_image:
+                item.picturePath ||
+                "https://images.unsplash.com/photo-1493244040629-496f6d136cc3?w=600&q=80",
+            },
+          ],
+    }));
+
+    return [addStoryCard, ...mapped];
+  }, [storyUsers]);
+
   return (
     <View>
       <Animated.FlatList
