@@ -1,16 +1,34 @@
-import { StyleSheet, Text, View } from "react-native";
-import React from "react";
+import { StyleSheet, View } from "react-native";
+import React, { useEffect, useState } from "react";
 import { GlobalStyles } from "../../../constants/Styles";
 import { FlatList } from "react-native";
 import { RefreshControl } from "react-native";
 import Post from "./Post";
-// MOCK MODE: Using MOCK_POSTS — replace with paginated API call when backend is ready
-import { MOCK_POSTS } from "../../../data/mockData";
 import { CONTAINER_HEIGHT } from "../head/Stories";
 import { useSharedValue } from "react-native-reanimated";
+import { fetchFeedPosts } from "../../../services/repositories/postsRepository";
 
 const Video = ({ StoryTranslate }) => {
   const lastScrollY = useSharedValue(0);
+  const [posts, setPosts] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadPosts() {
+      const result = await fetchFeedPosts({ maxResults: 30 });
+      if (active && result.ok) {
+        setPosts(result.data || []);
+      }
+    }
+
+    loadPosts();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   return (
     <View style={{ flex: 1, backgroundColor: GlobalStyles.colors.primary }}>
       <FlatList
@@ -35,12 +53,12 @@ const Video = ({ StoryTranslate }) => {
         refreshControl={
           <RefreshControl refreshing={false} onRefresh={() => {}} />
         }
-        keyExtractor={(data, index) => index.toString()}
-        data={[1, 2, 3, 4, 5, 6]}
-        renderItem={({ data, index }) => {
+        keyExtractor={(item, index) => String(item?._id || item?.id || index)}
+        data={posts}
+        renderItem={({ item }) => {
           return (
             <View>
-              <Post post={index % 2 === 0 ? MOCK_POSTS[0] : MOCK_POSTS[1]} />
+              <Post post={item} />
             </View>
           );
         }}

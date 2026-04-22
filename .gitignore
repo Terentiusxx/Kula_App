@@ -29,7 +29,13 @@ yarn-error.*
 *.pem
 
 # local env files
+.env
 .env*.local
+
+# service account secrets
+firebase-service-account.json
+*-firebase-adminsdk-*.json
 
 # typescript
 *.tsbuildinfo
+firebase-service-account.js

@@ -4,10 +4,11 @@ import Svg, { ClipPath, Defs, Image, Path } from "react-native-svg";
 
 import CardHeader from "./CardHeader";
 import CardFooter from "./CardFooter";
-import { MOCK_POSTS } from "../../data/mockData";
 
-const Card = ({ children, width, height, radius }) => {
+const Card = ({ children, width, height, radius, imageUri, user, timeLabel }) => {
   const adjustedRadius = Math.min(radius, width / 2, height / 2);
+  const fallbackImage =
+    "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=600&q=80";
 
   const path = `
     M${adjustedRadius},0
@@ -45,13 +46,13 @@ const Card = ({ children, width, height, radius }) => {
           width="100%"
           height="100%"
           preserveAspectRatio="xMidYMid slice"
-          href={MOCK_POSTS[0].picturePath}
+          href={imageUri || fallbackImage}
           clipPath="url(#clip)"
         />
       </Svg>
-      <CardHeader radius={radius} />
+      <CardHeader radius={radius} user={user} timeLabel={timeLabel} />
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <CardFooter radius={radius} width={width} />
+        <CardFooter radius={radius} width={width} user={user} />
       </View>
     </View>
   );

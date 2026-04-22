@@ -1,6 +1,4 @@
 import { Dimensions, I18nManager } from "react-native";
-const windowWidth = Dimensions.get("window").width;
-const windowHeight = Dimensions.get("window").height;
 
 export function useSwipe(
   onSwipeLeft,
@@ -20,6 +18,8 @@ export function useSwipe(
 
   // when touch ends check for swipe directions
   function onTouchEnd(e) {
+    const windowWidth = Dimensions.get("window").width;
+    const windowHeight = Dimensions.get("window").height;
     // get touch position and screen size
     const positionX = e.nativeEvent.pageX;
     const rangeX = windowWidth / rangeOffset;

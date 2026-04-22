@@ -1,4 +1,4 @@
-import { Pressable, StyleSheet, Image, View, Dimensions } from "react-native";
+import { Pressable, StyleSheet, Image, View, useWindowDimensions } from "react-native";
 import React, { useContext, useEffect, useState } from "react";
 import { LinearGradient } from "expo-linear-gradient";
 import Animated, {
@@ -12,8 +12,18 @@ import { useNavigation } from "@react-navigation/native";
 import { AppContext } from "../../store/app-context";
 import Loader from "../UI/Loader";
 
-const NewPostIcon = ({ exploreActive, pressed, setPressed }) => {
+const NewPostIcon = ({
+  exploreActive,
+  pressed,
+  setPressed,
+  size = 50,
+  buttonRadius,
+}) => {
   const appCtx = useContext(AppContext);
+  const { width } = useWindowDimensions();
+  const menuSize = Math.min(170, Math.max(130, width * 0.42));
+  const bubblePadding = Math.min(12, Math.max(8, width * 0.025));
+  const iconSize = Math.min(28, Math.max(20, width * 0.07));
   const exiting = (values) => {
     "worklet";
     const animations = {
@@ -48,6 +58,8 @@ const NewPostIcon = ({ exploreActive, pressed, setPressed }) => {
   return (
     <Pressable
       style={{
+        width: size,
+        height: size,
         justifyContent: "center",
         alignItems: "center",
       }}
@@ -58,8 +70,8 @@ const NewPostIcon = ({ exploreActive, pressed, setPressed }) => {
           style={[
             {
               position: "absolute",
-              height: 150,
-              width: 150,
+              height: menuSize,
+              width: menuSize,
               flexDirection: "row",
               justifyContent: "space-around",
             },
@@ -72,7 +84,7 @@ const NewPostIcon = ({ exploreActive, pressed, setPressed }) => {
               navigation.navigate("NewPostScreen");
             }}
             style={{
-              padding: 12,
+              padding: bubblePadding,
               borderRadius: 50,
               overflow: "hidden",
               alignSelf: "baseline",
@@ -83,7 +95,7 @@ const NewPostIcon = ({ exploreActive, pressed, setPressed }) => {
           >
             <Image
               source={require("../../assets/photo.png")}
-              style={{ width: 28, height: 28, tintColor: "#1D9E75" }}
+              style={{ width: iconSize, height: iconSize, tintColor: "#1D9E75" }}
             />
           </View>
           <View
@@ -92,7 +104,7 @@ const NewPostIcon = ({ exploreActive, pressed, setPressed }) => {
               navigation.navigate("NewPostScreen", { type: "video" });
             }}
             style={{
-              padding: 12,
+              padding: bubblePadding,
               borderRadius: 50,
               overflow: "hidden",
               alignSelf: "baseline",
@@ -103,7 +115,7 @@ const NewPostIcon = ({ exploreActive, pressed, setPressed }) => {
           >
             <Image
               source={require("../../assets/reels-focused.png")}
-              style={{ width: 28, height: 28, tintColor: "#C1603A" }}
+              style={{ width: iconSize, height: iconSize, tintColor: "#C1603A" }}
             />
           </View>
         </Animated.View>
@@ -119,6 +131,9 @@ const NewPostIcon = ({ exploreActive, pressed, setPressed }) => {
           }
         }}
         style={{
+          width: size,
+          height: size,
+          borderRadius: buttonRadius || size / 2,
           justifyContent: "center",
           alignItems: "center",
         }}
@@ -128,9 +143,9 @@ const NewPostIcon = ({ exploreActive, pressed, setPressed }) => {
           start={{ x: 0, y: 1 }}
           end={{ x: 1, y: 0 }}
           style={{
-            width: 50,
-            height: 50,
-            borderRadius: 50,
+            width: size,
+            height: size,
+            borderRadius: buttonRadius || size / 2,
             position: "absolute",
           }}
         />

@@ -128,10 +128,10 @@ export const SignedInStack = () => {
   );
 };
 
-export const SignedOutStack = () => (
+export const SignedOutStack = ({ initialRouteName = "OnboardingScreen" }) => (
   <NavigationContainer>
     <Stack.Navigator
-      initialRouteName="OnboardingScreen"
+      initialRouteName={initialRouteName}
       screenOptions={{ ...screenOptions, headerShown: false }}
     >
       <Stack.Screen name="OnboardingScreen" component={OnboardingScreen} />

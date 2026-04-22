@@ -10,7 +10,6 @@ import {
 import React, { memo, useState } from "react";
 import { GlobalStyles } from "../../constants/Styles";
 import EmojisList from "../searchScreen/EmojisList";
-import { MOCK_USERS } from "../../data/mockData";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import PressEffect from "../UI/PressEffect";
@@ -21,7 +20,14 @@ import EmojiInput from "../UI/EmojiInput";
 const RenderStory = ({ active, nextUser, previousUser, index }) => {
   const navigation = useNavigation();
   const [currentStory, setCurrentStory] = useState(0);
-  const noOfStories = MOCK_USERS[0].stories?.length ?? 1;
+  const fallbackUser = {
+    username: "user",
+    picturePath:
+      "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80",
+    stories: [],
+  };
+  const currentUser = fallbackUser;
+  const noOfStories = currentUser.stories?.length ?? 1;
   console.log("object", index);
   const nextStory = () => {
     if (currentStory < noOfStories - 1) {
@@ -81,11 +87,11 @@ const RenderStory = ({ active, nextUser, previousUser, index }) => {
                 }}
               >
                 <Image
-                  source={{ uri: MOCK_USERS[0].picturePath }}
+                  source={{ uri: currentUser.picturePath }}
                   style={{ width: 40, height: 40, borderRadius: 50 }}
                 />
                 <View style={{ paddingLeft: 10 }}>
-                  <Text style={{ color: "white" }}>{MOCK_USERS[0].username}</Text>
+                  <Text style={{ color: "white" }}>{currentUser.username}</Text>
                   <Text
                     style={{ color: GlobalStyles.colors.gray, fontSize: 10 }}
                   >
@@ -128,7 +134,7 @@ const RenderStory = ({ active, nextUser, previousUser, index }) => {
       >
         <Image
           source={{
-            uri: MOCK_USERS[0].stories?.[currentStory] ?? MOCK_USERS[0].picturePath,
+            uri: currentUser.stories?.[currentStory] ?? currentUser.picturePath,
           }}
           style={{
             flex: 1,

@@ -40,13 +40,13 @@ const InputField = ({
         lightTheme && styles.inputFieldLight,
         {
           borderColor: inValid
-            ? lightTheme ? "#E8E4FF" : GlobalStyles.colors.primary500
+            ? lightTheme ? GlobalStyles.colors.border : GlobalStyles.colors.primary500
             : GlobalStyles.colors.red,
         },
         containerStyle,
         isFocused && {
           borderWidth: 1.5,
-          borderColor: lightTheme ? "#7A40F8" : GlobalStyles.colors.purple,
+          borderColor: lightTheme ? GlobalStyles.colors.teal : GlobalStyles.colors.purple,
         },
       ]}
     >
@@ -61,9 +61,9 @@ const InputField = ({
       )}
       <View style={{ flex: 1 }}>
         <TextInput
-          style={{ color: lightTheme ? "#1A1A2E" : "white" }}
+          style={{ color: lightTheme ? GlobalStyles.colors.brown : "white" }}
           ref={txtRef}
-          placeholderTextColor={lightTheme ? "#B0AECF" : "#bdbdbd"}
+          placeholderTextColor={lightTheme ? GlobalStyles.colors.muted : "#bdbdbd"}
           autoCapitalize="none"
           placeholder={placeholder}
           keyboardType={keyboardType}
@@ -126,7 +126,7 @@ const styles = StyleSheet.create({
     padding: 15,
   },
   inputFieldLight: {
-    backgroundColor: "#F3F0FF",
-    borderColor: "#E8E4FF",
+    backgroundColor: GlobalStyles.colors.primary600,
+    borderColor: GlobalStyles.colors.border,
   },
 });

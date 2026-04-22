@@ -1,4 +1,4 @@
-import React, { useContext } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,18 +8,23 @@ import {
   Pressable,
   TouchableOpacity,
   StatusBar,
-  Dimensions,
+  useWindowDimensions,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import { KULA } from "../constants/Styles";
 import { AuthContext } from "../store/auth-context";
-import { MOCK_USERS, MOCK_EVENTS } from "../data/mockData";
-import { timeDifference } from "../utils/helperFunctions";
-
-const { width } = Dimensions.get("window");
-const EVENT_CARD_W = width * 0.48;
+import OfflineBanner from "../components/UI/OfflineBanner";
+import {
+  fetchNearbyUsers,
+  loadCachedNearbyUsers,
+} from "../services/repositories/discoveryRepository";
+import { fetchEvents, loadCachedEvents } from "../services/repositories/eventsRepository";
+import { fetchNotificationsForUser } from "../services/repositories/notificationsRepository";
+import { sendWave } from "../services/repositories/wavesRepository";
+import { useResponsiveMetrics } from "../hooks/useResponsiveMetrics";
 
 // ── Greeting helper ────────────────────────────────────────────────────────────
 function getGreeting() {
@@ -30,9 +35,13 @@ function getGreeting() {
 }
 
 // ── Nearby Event card ──────────────────────────────────────────────────────────
-function EventCard({ event }) {
+function EventCard({ event, cardWidth, titleStyle, subtitleStyle, onPress }) {
   return (
-    <View style={styles.eventCard}>
+    <TouchableOpacity
+      style={[styles.eventCard, { width: cardWidth }]}
+      activeOpacity={0.85}
+      onPress={() => onPress && onPress(event)}
+    >
       <View style={styles.eventImageContainer}>
         <Image
           source={{
@@ -47,22 +56,22 @@ function EventCard({ event }) {
         </View>
       </View>
       <View style={styles.eventInfo}>
-        <Text style={styles.eventTitle} numberOfLines={2}>
+        <Text style={[styles.eventTitle, titleStyle]} numberOfLines={2}>
           {event.title}
         </Text>
         <View style={styles.eventAttendees}>
           <Ionicons name="people-outline" size={13} color={KULA.muted} />
-          <Text style={styles.eventAttendeesText}>
+          <Text style={[styles.eventAttendeesText, subtitleStyle]}>
             {event.attendeeCount} attending
           </Text>
         </View>
       </View>
-    </View>
+    </TouchableOpacity>
   );
 }
 
 // ── Suggested Friend row ───────────────────────────────────────────────────────
-function FriendRow({ user }) {
+function FriendRow({ user, nameStyle, contextStyle, onWave, isWaved, isWaving }) {
   return (
     <View style={styles.friendRow}>
       {/* Avatar — real photo or initials fallback */}
@@ -78,16 +87,23 @@ function FriendRow({ user }) {
 
       {/* Name + flag */}
       <View style={styles.friendInfo}>
-        <Text style={styles.friendName}>
+        <Text style={[styles.friendName, nameStyle]}>
           {user.fullName}{" "}
           <Text style={{ fontSize: 16 }}>{user.originFlag}</Text>
         </Text>
-        <Text style={styles.friendContext}>{user.contextLine}</Text>
+        <Text style={[styles.friendContext, contextStyle]}>{user.contextLine}</Text>
       </View>
 
       {/* Wave button */}
-      <TouchableOpacity style={styles.waveBtn} activeOpacity={0.75}>
-        <Text style={styles.waveBtnText}>Wave</Text>
+      <TouchableOpacity
+        style={[styles.waveBtn, (isWaved || isWaving) && styles.waveBtnActive]}
+        activeOpacity={0.75}
+        onPress={() => onWave && onWave(user)}
+        disabled={isWaved || isWaving}
+      >
+        <Text style={[styles.waveBtnText, (isWaved || isWaving) && styles.waveBtnTextActive]}>
+          {isWaved ? "Waved 👋" : isWaving ? "Waving..." : "Wave"}
+        </Text>
       </TouchableOpacity>
     </View>
   );
@@ -95,15 +111,124 @@ function FriendRow({ user }) {
 
 // ── Home Screen ────────────────────────────────────────────────────────────────
 export default function HomeScreen() {
+  const { width } = useWindowDimensions();
+  const { scaleFont } = useResponsiveMetrics();
+  const eventCardWidth = Math.min(260, Math.max(150, width * 0.48));
   const authCtx = useContext(AuthContext);
   const navigation = useNavigation();
   const user = authCtx.userData;
+  const [suggestedFriends, setSuggestedFriends] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [notificationsCount, setNotificationsCount] = useState(0);
+  const [wavedUserIds, setWavedUserIds] = useState([]);
+  const [wavingUserIds, setWavingUserIds] = useState([]);
 
-  const suggestedFriends = MOCK_USERS.slice(0, 4);
+  useEffect(() => {
+    let active = true;
+
+    async function loadScreenData() {
+      const [friendsResult, eventsResult] = await Promise.all([
+        fetchNearbyUsers({ maxResults: 4, currentUser: user || {} }),
+        fetchEvents(8),
+      ]);
+
+      if (!active) {
+        return;
+      }
+
+      if (friendsResult.ok && Array.isArray(friendsResult.data) && friendsResult.data.length > 0) {
+        setSuggestedFriends(friendsResult.data.slice(0, 4));
+      } else {
+        const cachedFriends = loadCachedNearbyUsers(4, { currentUser: user || {} });
+        if (cachedFriends.ok) {
+          setSuggestedFriends(cachedFriends.data.slice(0, 4));
+        }
+      }
+
+      if (eventsResult.ok && Array.isArray(eventsResult.data) && eventsResult.data.length > 0) {
+        setEvents(eventsResult.data);
+      } else {
+        const cachedEvents = loadCachedEvents(8);
+        if (cachedEvents.ok) {
+          const mapped = cachedEvents.data.map((item) => ({
+            id: item.id,
+            _id: item.id,
+            ...item.payload,
+          }));
+          setEvents(mapped);
+        }
+      }
+    }
+
+    loadScreenData();
+    return () => {
+      active = false;
+    };
+  }, [user]);
+
+  useEffect(() => {
+    let active = true;
+    const userId = user?._id || user?.id;
+
+    async function loadNotificationCount() {
+      if (!userId) {
+        if (active) {
+          setNotificationsCount(0);
+        }
+        return;
+      }
+
+      const result = await fetchNotificationsForUser(userId, { maxResults: 99 });
+      if (!active) {
+        return;
+      }
+
+      if (result.ok && Array.isArray(result.data)) {
+        setNotificationsCount(result.data.length);
+      } else {
+        setNotificationsCount(0);
+      }
+    }
+
+    loadNotificationCount();
+    return () => {
+      active = false;
+    };
+  }, [user?._id, user?.id]);
+
+  async function handleWave(targetUser) {
+    const fromUserId = user?._id || user?.id;
+    const toUserId = targetUser?._id || targetUser?.id;
+    if (!fromUserId || !toUserId) {
+      return;
+    }
+    setWavingUserIds((prev) => (prev.includes(toUserId) ? prev : [...prev, toUserId]));
+
+    const result = await sendWave({
+      fromUserId,
+      fromUserName: user?.fullName,
+      fromUserAvatar: user?.picturePath,
+      toUserId,
+      toUserName: targetUser?.fullName,
+    });
+    if (result.ok) {
+      setWavedUserIds((prev) => (prev.includes(toUserId) ? prev : [...prev, toUserId]));
+      setWavingUserIds((prev) => prev.filter((id) => id !== toUserId));
+      return;
+    }
+    setWavingUserIds((prev) => prev.filter((id) => id !== toUserId));
+
+    Alert.alert("Wave failed", result.error?.message || "Could not send wave right now.");
+  }
+
+  function handleOpenEvents() {
+    navigation.navigate("EventsScreen");
+  }
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={KULA.cream} />
+      <OfflineBanner />
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -111,22 +236,25 @@ export default function HomeScreen() {
       >
         {/* ── Header ── */}
         <View style={styles.header}>
-          <Text style={styles.logoText}>KULA</Text>
+          <Text style={[styles.logoText, { fontSize: scaleFont(24, 21, 28) }]}>KULA</Text>
           <TouchableOpacity
             style={styles.bellBtn}
             onPress={() => navigation.navigate("NotificationsScreen")}
           >
             <Ionicons name="notifications-outline" size={24} color={KULA.brown} />
-            {/* Badge */}
-            <View style={styles.bellBadge}>
-              <Text style={styles.bellBadgeText}>3</Text>
-            </View>
+            {notificationsCount > 0 ? (
+              <View style={styles.bellBadge}>
+                <Text style={styles.bellBadgeText}>
+                  {notificationsCount > 99 ? "99+" : String(notificationsCount)}
+                </Text>
+              </View>
+            ) : null}
           </TouchableOpacity>
         </View>
 
         {/* ── Greeting ── */}
         <View style={styles.greetingBlock}>
-          <Text style={styles.greeting}>
+          <Text style={[styles.greeting, { fontSize: scaleFont(22, 19, 26) }]}>
             {getGreeting()},{" "}
             <Text style={styles.greetingName}>
               {user?.fullName?.split(" ")[0] ?? "Ama"}
@@ -134,7 +262,7 @@ export default function HomeScreen() {
           </Text>
           <View style={styles.locationRow}>
             <Ionicons name="location-outline" size={14} color={KULA.muted} />
-            <Text style={styles.locationText}>
+            <Text style={[styles.locationText, { fontSize: scaleFont(14, 12, 16) }]}>
               {" "}
               {user?.currentCity ?? "New in Accra"}
             </Text>
@@ -143,7 +271,10 @@ export default function HomeScreen() {
 
         {/* ── Nearby Events ── */}
         <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Nearby Events</Text>
+          <Text style={[styles.sectionTitle, { fontSize: scaleFont(18, 16, 21) }]}>Nearby Events</Text>
+          <TouchableOpacity onPress={handleOpenEvents}>
+            <Text style={styles.seeAll}>See all</Text>
+          </TouchableOpacity>
         </View>
 
         <ScrollView
@@ -151,22 +282,37 @@ export default function HomeScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.eventsScroll}
         >
-          {MOCK_EVENTS.map((event) => (
-            <EventCard key={event._id} event={event} />
+          {events.map((event, index) => (
+            <EventCard
+              key={String(event._id || event.id || index)}
+              event={event}
+              cardWidth={eventCardWidth}
+              titleStyle={{ fontSize: scaleFont(14, 12, 16) }}
+              subtitleStyle={{ fontSize: scaleFont(12, 10, 14) }}
+              onPress={handleOpenEvents}
+            />
           ))}
         </ScrollView>
 
         {/* ── Suggested Friends ── */}
         <View style={[styles.sectionHeader, { marginTop: 24 }]}>
-          <Text style={styles.sectionTitle}>Suggested Friends</Text>
-          <TouchableOpacity>
+          <Text style={[styles.sectionTitle, { fontSize: scaleFont(18, 16, 21) }]}>Suggested Friends</Text>
+          <TouchableOpacity onPress={() => navigation.navigate("FindFriendsScreen")}>
             <Text style={styles.seeAll}>See all</Text>
           </TouchableOpacity>
         </View>
 
         <View style={styles.friendsList}>
           {suggestedFriends.map((u) => (
-            <FriendRow key={u._id} user={u} />
+            <FriendRow
+              key={u._id}
+              user={u}
+              nameStyle={{ fontSize: scaleFont(15, 13, 17) }}
+              contextStyle={{ fontSize: scaleFont(12, 10, 14) }}
+              onWave={handleWave}
+              isWaved={wavedUserIds.includes(u._id || u.id)}
+              isWaving={wavingUserIds.includes(u._id || u.id)}
+            />
           ))}
         </View>
       </ScrollView>
@@ -276,7 +422,6 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
   },
   eventCard: {
-    width: EVENT_CARD_W,
     backgroundColor: KULA.white,
     borderRadius: 18,
     overflow: "hidden",
@@ -396,10 +541,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 8,
   },
+  waveBtnActive: {
+    backgroundColor: KULA.teal,
+  },
   waveBtnText: {
     color: KULA.teal,
     fontWeight: "600",
     fontSize: 14,
+  },
+  waveBtnTextActive: {
+    color: KULA.white,
   },
 
   // FAB
