@@ -2,10 +2,16 @@ import React from "react";
 import { TouchableOpacity, StyleSheet } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { KULA } from "../../constants/Styles";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function FAB({ onPress, icon = "menu" }) {
+  const insets = useSafeAreaInsets();
   return (
-    <TouchableOpacity style={styles.fab} onPress={onPress} activeOpacity={0.85}>
+    <TouchableOpacity
+      style={[styles.fab, { bottom: Math.max(90, insets.bottom + 70) }]}
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
       <Ionicons name={icon} size={24} color="#FFF" />
     </TouchableOpacity>
   );
@@ -14,7 +20,6 @@ export default function FAB({ onPress, icon = "menu" }) {
 const styles = StyleSheet.create({
   fab: {
     position: "absolute",
-    bottom: 90,
     right: 20,
     width: 56,
     height: 56,

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,12 +8,21 @@ import {
   Image,
   StatusBar,
   FlatList,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { KULA } from "../constants/Styles";
 import FAB from "../components/UI/FAB";
 import { useNavigation } from "@react-navigation/native";
+import { AuthContext } from "../store/auth-context";
+import {
+  fetchEvents,
+  fetchUserEventMemberships,
+  joinEvent,
+  loadCachedEvents,
+} from "../services/repositories/eventsRepository";
+import { useResponsiveMetrics } from "../hooks/useResponsiveMetrics";
 
 // ── Mock data ──────────────────────────────────────────────────────────────────
 const DAYS = [
@@ -28,73 +37,19 @@ const DAYS = [
 
 const CATEGORIES = ["All", "Food", "Cultural", "Language", "Sports", "Tech"];
 
-const EVENTS = [
-  {
-    _id: "e1",
-    title: "West African Cooking Class",
-    organiser: "Mama Esi",
-    organiserPic: "https://i.pravatar.cc/100?img=47",
-    image:
-      "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=800&q=80",
-    category: "Food",
-    time: "Today at 6:00 PM",
-    location: "Osu, Accra",
-    attendeeCount: 18,
-    socialProof:
-      "Kofi, Sarah, Ahmed, Yuki and 14 others from your community are going",
-  },
-  {
-    _id: "e2",
-    title: "Jollof Rice Festival",
-    organiser: "Community Kitchen",
-    organiserPic: "https://i.pravatar.cc/100?img=23",
-    image:
-      "https://images.unsplash.com/photo-1585937421612-70a008356fbe?w=800&q=80",
-    category: "Food",
-    time: "Sat at 12:00 PM",
-    location: "Labadi Beach, Accra",
-    attendeeCount: 42,
-    socialProof: "Fatima and 8 others from your community are going",
-  },
-  {
-    _id: "e3",
-    title: "Language Exchange Meetup",
-    organiser: "Yuki Tanaka",
-    organiserPic: "https://i.pravatar.cc/100?img=36",
-    image:
-      "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=800&q=80",
-    category: "Language",
-    time: "Sun at 3:00 PM",
-    location: "Cuppa Coffee, Osu",
-    attendeeCount: 9,
-    socialProof: "Elena and 2 others from your community are going",
-  },
-  {
-    _id: "e4",
-    title: "Cultural Dance Night",
-    organiser: "Marcus Osei",
-    organiserPic: "https://i.pravatar.cc/100?img=8",
-    image:
-      "https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=800&q=80",
-    category: "Cultural",
-    time: "Fri at 8:00 PM",
-    location: "Sandbox Beach, Accra",
-    attendeeCount: 56,
-    socialProof: "Kofi and 12 others from your community are going",
-  },
-];
-
 // ── Event card ─────────────────────────────────────────────────────────────────
-function EventCard({ event }) {
+function EventCard({ event, isJoined, onJoin }) {
+  const coverUri = event.image || event.coverImage;
+  const organiserUri = event.organiserPic;
   return (
     <View style={styles.eventCard}>
       {/* Cover image */}
-      <Image source={{ uri: event.image }} style={styles.eventImage} />
+      <Image source={{ uri: coverUri }} style={styles.eventImage} />
 
       {/* Info section */}
       <View style={styles.eventInfo}>
         <View style={styles.eventTopRow}>
-          <Image source={{ uri: event.organiserPic }} style={styles.organiserAvatar} />
+          <Image source={{ uri: organiserUri }} style={styles.organiserAvatar} />
           <View style={styles.eventMeta}>
             <Text style={styles.eventTitle}>{event.title}</Text>
             <Text style={styles.organiserName}>{event.organiser}</Text>
@@ -120,6 +75,15 @@ function EventCard({ event }) {
         </View>
 
         <Text style={styles.socialProof}>{event.socialProof}</Text>
+        <TouchableOpacity
+          style={[styles.joinBtn, isJoined && styles.joinBtnActive]}
+          onPress={() => onJoin(event)}
+          disabled={isJoined}
+        >
+          <Text style={[styles.joinBtnText, isJoined && styles.joinBtnTextActive]}>
+            {isJoined ? "Joined" : "Join Event"}
+          </Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -128,13 +92,88 @@ function EventCard({ event }) {
 // ── Events Screen ──────────────────────────────────────────────────────────────
 export default function EventsScreen() {
   const navigation = useNavigation();
+  const authCtx = useContext(AuthContext);
   const [selectedDay, setSelectedDay] = useState(1); // Tue = index 1
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const [joinedEventIds, setJoinedEventIds] = useState([]);
+  const [events, setEvents] = useState([]);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+  const [eventsError, setEventsError] = useState("");
+  const [sourceLabel, setSourceLabel] = useState("remote");
+  const { scaleFont } = useResponsiveMetrics();
+
+  const userId = authCtx.userData?._id || authCtx.userData?.id;
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadMemberships() {
+      if (!userId) {
+        return;
+      }
+      const result = await fetchUserEventMemberships(userId, 200);
+      if (active && result.ok) {
+        setJoinedEventIds(result.data.map((item) => item.eventId).filter((id) => Boolean(id)));
+      }
+    }
+
+    loadMemberships();
+    return () => {
+      active = false;
+    };
+  }, [userId]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadEvents() {
+      setIsLoadingEvents(true);
+      setEventsError("");
+      const result = await fetchEvents(100);
+      if (active && result.ok && Array.isArray(result.data) && result.data.length > 0) {
+        setEvents(result.data);
+        setSourceLabel("remote");
+        setIsLoadingEvents(false);
+        return;
+      }
+
+      const cached = loadCachedEvents(100);
+      if (active && cached.ok) {
+        const mapped = cached.data.map((item) => ({ _id: item.id, id: item.id, ...item.payload }));
+        setEvents(mapped);
+        setSourceLabel("cache");
+        if (mapped.length === 0 && result?.error) {
+          setEventsError(result.error.message || "Could not load events right now.");
+        }
+      } else if (active) {
+        setEvents([]);
+        setEventsError(result?.error?.message || cached?.error?.message || "Could not load events right now.");
+      }
+      if (active) {
+        setIsLoadingEvents(false);
+      }
+    }
+
+    loadEvents();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function handleJoin(event) {
+    if (!userId) {
+      return;
+    }
+    const result = await joinEvent({ userId, eventId: event._id });
+    if (result.ok) {
+      setJoinedEventIds((prev) => (prev.includes(event._id) ? prev : [...prev, event._id]));
+    }
+  }
 
   const filtered =
     selectedCategory === "All"
-      ? EVENTS
-      : EVENTS.filter((e) => e.category === selectedCategory);
+      ? events
+      : events.filter((e) => e.category === selectedCategory);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -145,15 +184,33 @@ export default function EventsScreen() {
         keyExtractor={(item) => item._id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
+        ListEmptyComponent={
+          <View style={styles.emptyWrap}>
+            {isLoadingEvents ? (
+              <>
+                <ActivityIndicator color={KULA.teal} />
+                <Text style={styles.emptyText}>Loading events...</Text>
+              </>
+            ) : eventsError ? (
+              <>
+                <Text style={styles.emptyText}>Could not load events.</Text>
+                <Text style={styles.emptySubText}>{eventsError}</Text>
+              </>
+            ) : (
+              <Text style={styles.emptyText}>No events available yet.</Text>
+            )}
+          </View>
+        }
         ListHeaderComponent={() => (
           <>
             {/* Header */}
             <View style={styles.header}>
-              <Text style={styles.heading}>Events</Text>
+              <Text style={[styles.heading, { fontSize: scaleFont(26, 22, 30) }]}>Events</Text>
               <TouchableOpacity>
                 <Ionicons name="calendar-outline" size={24} color={KULA.brown} />
               </TouchableOpacity>
             </View>
+            <Text style={styles.sourceText}>Source: {sourceLabel}</Text>
 
             {/* Day selector */}
             <View style={styles.dayRow}>
@@ -168,10 +225,10 @@ export default function EventsScreen() {
                     style={[styles.dayBtn, i === selectedDay && styles.dayBtnActive]}
                     onPress={() => setSelectedDay(i)}
                   >
-                    <Text style={[styles.dayLabel, i === selectedDay && styles.dayLabelActive]}>
+                    <Text style={[styles.dayLabel, { fontSize: scaleFont(11, 10, 13) }, i === selectedDay && styles.dayLabelActive]}>
                       {d.day}
                     </Text>
-                    <Text style={[styles.dayDate, i === selectedDay && styles.dayDateActive]}>
+                    <Text style={[styles.dayDate, { fontSize: scaleFont(17, 14, 20) }, i === selectedDay && styles.dayDateActive]}>
                       {d.date}
                     </Text>
                   </TouchableOpacity>
@@ -195,9 +252,7 @@ export default function EventsScreen() {
                   style={[styles.catPill, selectedCategory === cat && styles.catPillActive]}
                   onPress={() => setSelectedCategory(cat)}
                 >
-                  <Text
-                    style={[styles.catPillText, selectedCategory === cat && styles.catPillTextActive]}
-                  >
+                  <Text style={[styles.catPillText, { fontSize: scaleFont(14, 12, 16) }, selectedCategory === cat && styles.catPillTextActive]}>
                     {cat}
                   </Text>
                 </TouchableOpacity>
@@ -208,7 +263,13 @@ export default function EventsScreen() {
             <View style={{ height: 8 }} />
           </>
         )}
-        renderItem={({ item }) => <EventCard event={item} />}
+        renderItem={({ item }) => (
+          <EventCard
+            event={item}
+            isJoined={joinedEventIds.includes(item._id)}
+            onJoin={handleJoin}
+          />
+        )}
         ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
       />
 
@@ -220,6 +281,11 @@ export default function EventsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: KULA.cream },
   listContent: { paddingHorizontal: 20, paddingBottom: 120 },
+  sourceText: {
+    fontSize: 12,
+    color: KULA.muted,
+    marginBottom: 10,
+  },
 
   header: {
     flexDirection: "row",
@@ -331,5 +397,42 @@ const styles = StyleSheet.create({
     color: KULA.teal,
     fontWeight: "500",
     lineHeight: 19,
+  },
+  joinBtn: {
+    marginTop: 12,
+    alignSelf: "flex-start",
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: KULA.teal,
+  },
+  joinBtnActive: {
+    backgroundColor: KULA.teal,
+  },
+  joinBtnText: {
+    color: KULA.teal,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  joinBtnTextActive: {
+    color: KULA.white,
+  },
+  emptyWrap: {
+    paddingVertical: 28,
+    alignItems: "center",
+  },
+  emptyText: {
+    color: KULA.brown,
+    fontSize: 15,
+    fontWeight: "600",
+    textAlign: "center",
+    marginTop: 8,
+  },
+  emptySubText: {
+    color: KULA.muted,
+    fontSize: 13,
+    marginTop: 6,
+    textAlign: "center",
   },
 });

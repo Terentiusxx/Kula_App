@@ -1,5 +1,4 @@
-import { Dimensions, StyleSheet } from "react-native";
-const { height, width } = Dimensions.get("window");
+import { Dimensions } from "react-native";
 
 // ─── KULA Design Tokens ───────────────────────────────────────────────────────
 export const KULA = {
@@ -43,11 +42,15 @@ export const GlobalStyles = {
     // KULA direct references
     ...KULA,
   },
-  styles: StyleSheet.create({
+  styles: {
     tabBarPadding: 100,
-    windowWidth: width,
-    windowHeight: height,
-  }),
+    get windowWidth() {
+      return Dimensions.get("window").width;
+    },
+    get windowHeight() {
+      return Dimensions.get("window").height;
+    },
+  },
 };
 
 export const DEFAULT_DP =

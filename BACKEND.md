@@ -182,3 +182,64 @@ npx expo start
 ```
 
 Scan the QR code with the **Expo Go** app on your phone (same WiFi network as dev machine).
+
+---
+
+## 8. Firestore Seed Script
+
+A deterministic seed utility is included for quickly populating Firestore with linked sample data that matches app repository query shapes.
+
+### Files
+
+- `scripts/seed-firestore.js`
+- `scripts/seed-data.js`
+
+### Prerequisites
+
+1. Download a Firebase service account JSON for the project.
+2. Set an environment variable to that file path:
+
+```powershell
+$env:FIREBASE_SERVICE_ACCOUNT_PATH="C:\path\to\service-account.json"
+```
+
+### Commands
+
+- Dry-run (prints counts only, no writes):
+
+```bash
+npm run seed:firestore:dry-run
+```
+
+- Seed write (idempotent upserts using deterministic IDs):
+
+```bash
+npm run seed:firestore
+```
+
+- Reset seeded docs then re-seed:
+
+```bash
+npm run seed:firestore:reset
+```
+
+### Seeded Collections (small scope)
+
+- `users` (10)
+- `posts` (20)
+- `communities` (10)
+- `community_memberships`
+- `events` (10)
+- `event_attendees`
+- `notifications`
+- `chats`
+- `chats/{chatId}/messages`
+- `wisdom_posts`
+- `cuisines`
+- `restaurants`
+
+### Notes
+
+- IDs use stable prefixes (for example `seed_user_01`), so re-running does not create duplicate growth.
+- `--reset` only deletes deterministic seed IDs created by this script.
+- The script prints a post-seed validation checklist for key app surfaces (Home, Discover, Events, Messages, Notifications, Wisdom, Food/Culture).

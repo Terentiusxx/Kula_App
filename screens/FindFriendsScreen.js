@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useEffect, useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -8,65 +8,30 @@ import {
   Image,
   FlatList,
   StatusBar,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { KULA } from "../constants/Styles";
 import FAB from "../components/UI/FAB";
 import { useNavigation } from "@react-navigation/native";
+import { AuthContext } from "../store/auth-context";
+import { fetchNearbyUsers } from "../services/repositories/discoveryRepository";
+import { sendWave } from "../services/repositories/wavesRepository";
 
-// ── Mock data ──────────────────────────────────────────────────────────────────
 const FILTERS = ["New Arrivals", "Same Country", "Same Interests", "Nearby"];
+const NEARBY_DISTANCE_KM = 500;
+const NEW_ARRIVAL_WINDOW_YEARS = 2;
 
-const FIND_FRIENDS = [
-  {
-    _id: "ff1",
-    fullName: "Kwame Osei",
-    originCountry: "Ghana",
-    originFlag: "🇬🇭",
-    currentCity: "Accra",
-    picturePath: "https://i.pravatar.cc/200?img=8",
-    interests: ["Food", "Music"],
-    contextLine: "Both in the Tech community",
-    isOnline: true,
-  },
-  {
-    _id: "ff2",
-    fullName: "Amina Hassan",
-    originCountry: "Kenya",
-    originFlag: "🇰🇪",
-    currentCity: "Accra",
-    picturePath: "https://i.pravatar.cc/200?img=29",
-    interests: ["Art", "Language Exchange"],
-    contextLine: "Also new to Accra",
-    isOnline: true,
-  },
-  {
-    _id: "ff3",
-    fullName: "Fatima Al-Rashid",
-    originCountry: "Lebanon",
-    originFlag: "🇱🇧",
-    currentCity: "Accra",
-    picturePath: "https://i.pravatar.cc/200?img=23",
-    interests: ["Food", "Cooking"],
-    contextLine: "Shared interest: Cooking",
-    isOnline: false,
-  },
-  {
-    _id: "ff4",
-    fullName: "Yuki Tanaka",
-    originCountry: "Japan",
-    originFlag: "🇯🇵",
-    currentCity: "Accra",
-    picturePath: "https://i.pravatar.cc/200?img=36",
-    interests: ["Language Exchange", "Art"],
-    contextLine: "Both learning Twi",
-    isOnline: true,
-  },
-];
+function normalizeText(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
 
 // ── Person card ────────────────────────────────────────────────────────────────
-function PersonCard({ person }) {
+function PersonCard({ person, onWave, isWaved, isWaving }) {
   const navigation = useNavigation();
   return (
     <View style={styles.personCard}>
@@ -85,7 +50,7 @@ function PersonCard({ person }) {
       {/* Middle: online indicator + interest tags */}
       <View style={styles.tagsRow}>
         {person.isOnline && <View style={styles.onlineIndicator} />}
-        {person.interests.map((interest) => (
+        {(person.interests || []).map((interest) => (
           <View key={interest} style={styles.interestTag}>
             <Text style={styles.interestTagText}>{interest}</Text>
           </View>
@@ -97,12 +62,24 @@ function PersonCard({ person }) {
 
       {/* Action buttons */}
       <View style={styles.actionsRow}>
-        <TouchableOpacity style={styles.waveBtn} activeOpacity={0.75}>
-          <Text style={styles.waveBtnText}>Wave</Text>
+        <TouchableOpacity
+          style={[styles.waveBtn, (isWaved || isWaving) && styles.waveBtnActive]}
+          activeOpacity={0.75}
+          onPress={() => onWave && onWave(person)}
+          disabled={isWaved || isWaving}
+        >
+          <Text style={[styles.waveBtnText, (isWaved || isWaving) && styles.waveBtnTextActive]}>
+            {isWaved ? "Waved 👋" : isWaving ? "Waving..." : "Wave"}
+          </Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.profileBtn}
-          onPress={() => navigation.navigate("UserProfileScreen")}
+          onPress={() =>
+            navigation.navigate("UserProfileScreen", {
+              user: person,
+              userId: person?._id || person?.id || null,
+            })
+          }
           activeOpacity={0.85}
         >
           <Text style={styles.profileBtnText}>View Profile</Text>
@@ -115,15 +92,120 @@ function PersonCard({ person }) {
 // ── Find Friends Screen ────────────────────────────────────────────────────────
 export default function FindFriendsScreen() {
   const navigation = useNavigation();
+  const authCtx = useContext(AuthContext);
   const [selectedFilter, setSelectedFilter] = useState("New Arrivals");
+  const [people, setPeople] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [sourceLabel, setSourceLabel] = useState("remote");
+  const [wavedUserIds, setWavedUserIds] = useState([]);
+  const [wavingUserIds, setWavingUserIds] = useState([]);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadNearby() {
+      setIsLoading(true);
+      const result = await fetchNearbyUsers({
+        searchText: "",
+        maxResults: 50,
+        currentUser: authCtx.userData || {},
+      });
+
+      if (!active) {
+        return;
+      }
+
+      if (result.ok) {
+        setPeople(result.data);
+        setSourceLabel(result.source || "remote");
+      } else {
+        setPeople([]);
+      }
+      setIsLoading(false);
+    }
+
+    loadNearby();
+
+    return () => {
+      active = false;
+    };
+  }, [authCtx.userData]);
+
+  async function handleWave(person) {
+    const fromUserId = authCtx.userData?._id || authCtx.userData?.id;
+    const toUserId = person?._id || person?.id;
+    if (!fromUserId || !toUserId) {
+      return;
+    }
+    setWavingUserIds((prev) => (prev.includes(toUserId) ? prev : [...prev, toUserId]));
+
+    const result = await sendWave({
+      fromUserId,
+      fromUserName: authCtx.userData?.fullName,
+      fromUserAvatar: authCtx.userData?.picturePath,
+      toUserId,
+      toUserName: person?.fullName,
+    });
+    if (result.ok) {
+      setWavedUserIds((prev) => (prev.includes(toUserId) ? prev : [...prev, toUserId]));
+      setWavingUserIds((prev) => prev.filter((id) => id !== toUserId));
+      return;
+    }
+    setWavingUserIds((prev) => prev.filter((id) => id !== toUserId));
+
+    Alert.alert("Wave failed", result.error?.message || "Could not send wave right now.");
+  }
+
+  const filteredPeople = useMemo(() => {
+    const currentUser = authCtx.userData || {};
+    const currentInterests = new Set(
+      (currentUser.interests || []).map((item) => normalizeText(item))
+    );
+    const currentCountry = normalizeText(currentUser.originCountry);
+    const currentYear = new Date().getFullYear();
+    const minArrivalYear = currentYear - NEW_ARRIVAL_WINDOW_YEARS;
+
+    if (selectedFilter === "Same Country") {
+      return people.filter((person) => normalizeText(person.originCountry) === currentCountry);
+    }
+
+    if (selectedFilter === "Same Interests") {
+      return people
+        .map((person) => {
+          const sharedCount = (person.interests || []).reduce((count, interest) => {
+            return currentInterests.has(normalizeText(interest)) ? count + 1 : count;
+          }, 0);
+          return { ...person, sharedInterestsCount: sharedCount };
+        })
+        .filter((person) => person.sharedInterestsCount > 0)
+        .sort((a, b) => b.sharedInterestsCount - a.sharedInterestsCount);
+    }
+
+    if (selectedFilter === "Nearby") {
+      return people
+        .filter((person) => {
+          const distance = Number(person.distanceKmApprox);
+          return Number.isFinite(distance) && distance <= NEARBY_DISTANCE_KM;
+        })
+        .sort((a, b) => Number(a.distanceKmApprox || Infinity) - Number(b.distanceKmApprox || Infinity));
+    }
+
+    if (selectedFilter === "New Arrivals") {
+      return people
+        .filter((person) => Number(person.arrivalYear || 0) >= minArrivalYear)
+        .sort((a, b) => Number(b.arrivalYear || 0) - Number(a.arrivalYear || 0));
+    }
+
+    return people;
+  }, [authCtx.userData, people, selectedFilter]);
 
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={KULA.cream} />
 
       <FlatList
-        data={FIND_FRIENDS}
-        keyExtractor={(item) => item._id}
+        data={filteredPeople}
+        keyExtractor={(item) => String(item._id || item.id)}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
         ListHeaderComponent={() => (
@@ -158,10 +240,34 @@ export default function FindFriendsScreen() {
             </ScrollView>
 
             <View style={{ height: 16 }} />
+            <Text style={styles.metaText}>
+              {isLoading
+                ? "Loading nearby people..."
+                : "Showing " + sourceLabel + " discovery results"}
+            </Text>
+            <View style={{ height: 8 }} />
           </>
         )}
-        renderItem={({ item }) => <PersonCard person={item} />}
+        renderItem={({ item }) => (
+          <PersonCard
+            person={item}
+            onWave={handleWave}
+            isWaved={wavedUserIds.includes(item._id || item.id)}
+            isWaving={wavingUserIds.includes(item._id || item.id)}
+          />
+        )}
         ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
+        ListEmptyComponent={
+          !isLoading ? (
+            <Text style={styles.emptyText}>
+              {selectedFilter === "Nearby"
+                ? "No nearby people found with location enabled."
+                : selectedFilter === "New Arrivals"
+                  ? "No recent arrivals found right now."
+                  : "No people found right now."}
+            </Text>
+          ) : null
+        }
       />
 
       <FAB onPress={() => navigation.navigate("DiscoverScreen")} icon="compass-outline" />
@@ -188,6 +294,8 @@ const styles = StyleSheet.create({
   filterPillActive: { backgroundColor: KULA.teal, borderColor: KULA.teal },
   filterText: { fontSize: 14, fontWeight: "600", color: KULA.brown },
   filterTextActive: { color: KULA.white },
+  metaText: { fontSize: 12, color: KULA.muted, paddingHorizontal: 2 },
+  emptyText: { fontSize: 14, color: KULA.muted, textAlign: "center", marginTop: 24 },
 
   // Person card
   personCard: {
@@ -255,7 +363,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     alignItems: "center",
   },
+  waveBtnActive: {
+    backgroundColor: KULA.teal,
+  },
   waveBtnText: { fontSize: 15, fontWeight: "600", color: KULA.teal },
+  waveBtnTextActive: { color: KULA.white },
   profileBtn: {
     flex: 1,
     backgroundColor: KULA.teal,

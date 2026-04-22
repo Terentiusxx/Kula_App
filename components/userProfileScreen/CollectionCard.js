@@ -7,13 +7,19 @@ import {
   View,
 } from "react-native";
 import React from "react";
-import { MOCK_POSTS } from "../../data/mockData";
-import { MOCK_USERS } from "../../data/mockData";
 import { useNavigation } from "@react-navigation/native";
 const { height, width } = Dimensions.get("window");
 const size = width / 4 - 10;
-const CollectionCard = () => {
+const FALLBACK_IMAGE = "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=400&q=80";
+
+const CollectionCard = ({ images = [], title = "Collection" }) => {
   const navigation = useNavigation();
+  const tileImages = [
+    images[0] || FALLBACK_IMAGE,
+    images[1] || FALLBACK_IMAGE,
+    images[2] || FALLBACK_IMAGE,
+    images[3] || FALLBACK_IMAGE,
+  ];
   return (
     <Pressable
       onPress={() => {}}
@@ -22,24 +28,24 @@ const CollectionCard = () => {
     >
       <View style={styles.row}>
         <Image
-          source={{ uri: MOCK_POSTS[0].picturePath }}
+          source={{ uri: tileImages[0] }}
           style={styles.image}
           resizeMode="cover"
         />
         <Image
-          source={{ uri: MOCK_USERS[1].picturePath }}
+          source={{ uri: tileImages[1] }}
           style={styles.image}
           resizeMode="cover"
         />
       </View>
       <View style={styles.row}>
         <Image
-          source={{ uri: MOCK_POSTS[0].picturePath }}
+          source={{ uri: tileImages[2] }}
           style={styles.image}
           resizeMode="cover"
         />
         <Image
-          source={{ uri: MOCK_USERS[1].picturePath }}
+          source={{ uri: tileImages[3] }}
           style={styles.image}
           resizeMode="cover"
         />
@@ -53,7 +59,7 @@ const CollectionCard = () => {
             fontSize: 18,
           }}
         >
-          Collection Title
+          {title}
         </Text>
       </View>
     </Pressable>

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,61 +8,18 @@ import {
   Image,
   TouchableOpacity,
   StatusBar,
+  ActivityIndicator,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { KULA } from "../constants/Styles";
 import FAB from "../components/UI/FAB";
-import { useNavigation } from "@react-navigation/native";
-
-// ── Mock message threads ───────────────────────────────────────────────────────
-const THREADS = [
-  {
-    _id: "t1",
-    contactName: "Kofi Mensah",
-    preview: "See you at the food meetup!",
-    timestamp: "2m ago",
-    unread: 2,
-    image: "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=200&q=80",
-    isGroup: false,
-  },
-  {
-    _id: "t2",
-    contactName: "Tech Newcomers",
-    preview: "Sarah: Anyone tried the new co-working space?",
-    timestamp: "1h ago",
-    unread: 0,
-    image: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=200&q=80",
-    isGroup: true,
-  },
-  {
-    _id: "t3",
-    contactName: "Amara Okafor",
-    preview: "Thanks for the restaurant recommendation!",
-    timestamp: "3h ago",
-    unread: 0,
-    image: "https://i.pravatar.cc/200?img=47",
-    isGroup: false,
-  },
-  {
-    _id: "t4",
-    contactName: "Fatima Al-Rashid",
-    preview: "The kibbeh recipe is on its way 📩",
-    timestamp: "Yesterday",
-    unread: 1,
-    image: "https://i.pravatar.cc/200?img=23",
-    isGroup: false,
-  },
-  {
-    _id: "t5",
-    contactName: "Food Lovers GH",
-    preview: "Priya: Anyone joining the cooking class tonight?",
-    timestamp: "Yesterday",
-    unread: 0,
-    image: "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=200&q=80",
-    isGroup: true,
-  },
-];
+import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { AuthContext } from "../store/auth-context";
+import {
+  fetchThreads,
+  loadCachedThreads,
+} from "../services/repositories/messagesRepository";
 
 // ── Thread row ─────────────────────────────────────────────────────────────────
 function ThreadRow({ thread }) {
@@ -70,7 +27,13 @@ function ThreadRow({ thread }) {
   return (
     <TouchableOpacity
       style={styles.row}
-      onPress={() => navigation.navigate("ChatScreen")}
+      onPress={() =>
+        navigation.navigate("ChatScreen", {
+          chatId: thread._id,
+          contactName: thread.contactName,
+          contactInitials: thread.contactInitials,
+        })
+      }
       activeOpacity={0.7}
     >
       {/* Avatar + unread badge */}
@@ -97,12 +60,171 @@ function ThreadRow({ thread }) {
   );
 }
 
+function toMillis(value) {
+  if (!value) return 0;
+  if (typeof value?.toDate === "function") return value.toDate().getTime();
+  if (typeof value === "number") return value;
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatThreadTime(value) {
+  const ms = toMillis(value);
+  if (!ms) {
+    return "";
+  }
+  const date = new Date(ms);
+  return date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+function normalizeName(value) {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+function inferPreviewLabel(payload, currentUserId, currentUserName, fallbackContactName) {
+  const messageText = String(payload?.lastMessage || payload?.lastMessageText || "").trim();
+  if (!messageText) {
+    return "Open chat";
+  }
+
+  const lastSenderId = payload?.lastSenderId || "";
+  if (lastSenderId) {
+    const label =
+      lastSenderId === currentUserId
+        ? "You"
+        : payload?.lastSenderName || fallbackContactName || "Contact";
+    return label + ": " + messageText;
+  }
+
+  const waveMatch = messageText.match(/^👋\s*Wave from\s+(.+)$/i);
+  if (waveMatch?.[1] && normalizeName(waveMatch[1]) === normalizeName(currentUserName)) {
+    return "You: " + messageText;
+  }
+
+  if (payload?.preview) {
+    return payload.preview;
+  }
+  return (payload?.lastSenderName || fallbackContactName || "Contact") + ": " + messageText;
+}
+
 // ── Messages Screen ────────────────────────────────────────────────────────────
 export default function MessagesScreen() {
+  const THREADS_REFRESH_WINDOW_MS = 30000;
   const navigation = useNavigation();
+  const authCtx = useContext(AuthContext);
   const [search, setSearch] = useState("");
+  const [threads, setThreads] = useState([]);
+  const [isLoadingThreads, setIsLoadingThreads] = useState(true);
+  const [isRefreshingThreads, setIsRefreshingThreads] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [lastRemoteFetchAt, setLastRemoteFetchAt] = useState(0);
 
-  const filtered = THREADS.filter(
+  useFocusEffect(
+    React.useCallback(() => {
+      setRefreshKey((value) => value + 1);
+    }, [])
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadThreads() {
+      const userId = authCtx.userData?._id || authCtx.userData?.id;
+      if (!userId) {
+        if (active) {
+          setThreads([]);
+          setIsLoadingThreads(false);
+        }
+        return;
+      }
+
+      const cachedResult = loadCachedThreads(100);
+      if (active && cachedResult.ok && cachedResult.data.length > 0) {
+        const mapped = cachedResult.data.map((item) => ({
+          _id: item.id,
+          contactName:
+            item.payload?.contactName || item.payload?.title || item.payload?.name || "Chat",
+          contactInitials: item.payload?.contactInitials || "CU",
+          preview: inferPreviewLabel(
+            item.payload || {},
+            userId,
+            authCtx.userData?.fullName || "",
+            item.payload?.contactName || item.payload?.title || item.payload?.name || "Chat"
+          ),
+          timestamp: formatThreadTime(
+            item.payload?.lastMessageAt || item.payload?.updatedAt || item.payload?.createdAt
+          ),
+          unread: Number(item.payload?.unreadCount || 0),
+          image:
+            item.payload?.contactAvatar ||
+            item.payload?.image ||
+            "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=200&q=80",
+          isGroup: Boolean(item.payload?.isGroup),
+        }));
+        setThreads(mapped);
+        setIsLoadingThreads(false);
+      }
+
+      const shouldSkipRemote =
+        threads.length > 0 && Date.now() - lastRemoteFetchAt < THREADS_REFRESH_WINDOW_MS;
+
+      if (shouldSkipRemote) {
+        if (active) {
+          setIsRefreshingThreads(false);
+          setIsLoadingThreads(false);
+        }
+        return;
+      }
+
+      if (active) {
+        if (threads.length === 0) {
+          setIsLoadingThreads(true);
+        } else {
+          setIsRefreshingThreads(true);
+        }
+      }
+
+      const remoteResult = await fetchThreads(userId, 100, {
+        currentUserName: authCtx.userData?.fullName || "",
+      });
+      if (active && remoteResult.ok && remoteResult.data.length > 0) {
+        const mapped = remoteResult.data.map((item) => ({
+          _id: item.id || item._id,
+          contactName: item.contactName || item.title || item.name || "Chat",
+          contactInitials: item.contactInitials || "CU",
+          preview: inferPreviewLabel(
+            item,
+            userId,
+            authCtx.userData?.fullName || "",
+            item.contactName || item.title || item.name || "Chat"
+          ),
+          timestamp: formatThreadTime(item.lastMessageAt || item.updatedAt || item.createdAt),
+          unread: Number(item.unreadCount || 0),
+          image:
+            item.contactAvatar ||
+            item.image ||
+            "https://images.unsplash.com/photo-1529156069898-49953e39b3ac?w=200&q=80",
+          isGroup: Boolean(item.isGroup),
+        }));
+        setThreads(mapped);
+        setLastRemoteFetchAt(Date.now());
+      }
+      if (active) {
+        setIsRefreshingThreads(false);
+        setIsLoadingThreads(false);
+      }
+    }
+
+    loadThreads();
+    return () => {
+      active = false;
+    };
+  }, [authCtx.userData, refreshKey, threads.length, lastRemoteFetchAt]);
+
+  const filtered = threads.filter(
     (t) =>
       t.contactName.toLowerCase().includes(search.toLowerCase()) ||
       t.preview.toLowerCase().includes(search.toLowerCase())
@@ -135,10 +257,28 @@ export default function MessagesScreen() {
                 onChangeText={setSearch}
               />
             </View>
+            {isRefreshingThreads ? (
+              <View style={styles.refreshRow}>
+                <ActivityIndicator size="small" color={KULA.teal} />
+                <Text style={styles.refreshText}>Refreshing...</Text>
+              </View>
+            ) : null}
 
             <View style={{ height: 8 }} />
           </>
         )}
+        ListEmptyComponent={
+          <View style={styles.emptyWrap}>
+            {isLoadingThreads ? (
+              <>
+                <ActivityIndicator size="small" color={KULA.teal} />
+                <Text style={styles.emptyText}>Loading messages...</Text>
+              </>
+            ) : (
+              <Text style={styles.emptyText}>No messages yet.</Text>
+            )}
+          </View>
+        }
         renderItem={({ item, index }) => (
           <View>
             <ThreadRow thread={item} />
@@ -175,6 +315,27 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   searchInput: { flex: 1, fontSize: 15, color: KULA.brown },
+  refreshRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginHorizontal: 22,
+    marginTop: 8,
+  },
+  refreshText: {
+    fontSize: 12,
+    color: KULA.muted,
+  },
+  emptyWrap: {
+    paddingHorizontal: 20,
+    paddingVertical: 28,
+    alignItems: "center",
+    gap: 8,
+  },
+  emptyText: {
+    color: KULA.muted,
+    fontSize: 14,
+  },
 
   row: {
     flexDirection: "row",

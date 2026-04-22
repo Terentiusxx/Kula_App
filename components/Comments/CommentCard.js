@@ -2,13 +2,19 @@ import { Image, StyleSheet, Text, View } from "react-native";
 import React from "react";
 import { Ionicons } from "@expo/vector-icons";
 import { GlobalStyles } from "../../constants/Styles";
-import { MOCK_USERS } from "../../data/mockData";
-function CommentCard() {
+function CommentCard({ comment }) {
+  const avatar =
+    comment?.author?.picturePath ||
+    "https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=200&q=80";
+  const authorName = comment?.author?.name || "Community Member";
+  const text = comment?.text || "No comment text yet.";
+  const time = comment?.time || "just now";
+
   return (
     <View style={styles.container}>
       <View style={{ flexDirection: "row" }}>
         <Image
-          source={{ uri: MOCK_USERS[0].picturePath }}
+          source={{ uri: avatar }}
           style={{
             width: 50,
             height: 50,
@@ -24,8 +30,7 @@ function CommentCard() {
           }}
         >
           <Text style={{ fontWeight: "bold", fontSize: 14, color: "white" }}>
-            John Doe asdlaksm aslkdmsdksad as
-            aaksjdlmakjndsmlasknjdlmlskcnmsalmcksacansldsakdalsdlnsdksadm;samdas;dm;
+            {authorName}: {text}
           </Text>
           <Text
             style={{
@@ -34,7 +39,7 @@ function CommentCard() {
               alignSelf: "flex-end",
             }}
           >
-            2 minutes Ago
+            {time}
           </Text>
         </View>
       </View>

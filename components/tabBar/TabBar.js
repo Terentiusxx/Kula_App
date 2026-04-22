@@ -1,5 +1,5 @@
 import { Fragment, useContext, useEffect, useRef, useState } from "react";
-import { View, Pressable, StyleSheet, Image } from "react-native";
+import { View, Pressable, StyleSheet, useWindowDimensions } from "react-native";
 import Animated, {
   FadeIn,
   FadeOut,
@@ -10,9 +10,13 @@ import { GlobalStyles } from "../../constants/Styles";
 import TabBarSvg from "./TabBarSvg";
 import NewPostIcon from "./NewPostIcon";
 import { AppContext } from "../../store/app-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { getTabBarMetrics } from "./tabBarMetrics";
 
 const TabBar = ({ state, descriptors, navigation }) => {
   const appCtx = useContext(AppContext);
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const screens = [
     {
       name: "HomeScreen",
@@ -41,13 +45,26 @@ const TabBar = ({ state, descriptors, navigation }) => {
       iconUnfocued: require("../../assets/explore.png"),
     },
   ];
-  const [tabBarHeight, setTabBarHeight] = useState(50);
+  const [tabBarHeight, setTabBarHeight] = useState(74);
   const [actionBtnPressed, setActionBtnPressed] = useState(false);
+  const metrics = getTabBarMetrics(width);
+  const centerButtonSize = metrics.buttonDiameter;
+  const centerOffset = metrics.notchDepth - metrics.buttonRadius;
+  const bottomInsetPadding = Math.max(12, (insets.bottom || 0) + 2);
 
   const activeTabScreen = state.routes[state.index].name;
+  const shouldBlockScreenWithOverlay =
+    actionBtnPressed && activeTabScreen !== "DiscoverScreen";
+
+  useEffect(() => {
+    if (activeTabScreen === "DiscoverScreen" && actionBtnPressed) {
+      setActionBtnPressed(false);
+    }
+  }, [activeTabScreen, actionBtnPressed]);
+
   return (
     <Fragment>
-      {actionBtnPressed && (
+      {shouldBlockScreenWithOverlay && (
         <Animated.View
           style={{
             position: "absolute",
@@ -66,24 +83,38 @@ const TabBar = ({ state, descriptors, navigation }) => {
           />
         </Animated.View>
       )}
-      <View style={{ zIndex: 10 }}>
-        <TabBarSvg height={tabBarHeight} />
+      <View
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          zIndex: 10,
+          elevation: 1,
+        }}
+      >
+        <TabBarSvg
+          width={width}
+          height={tabBarHeight}
+        />
       </View>
       <View
         style={{
           flexDirection: "row",
           justifyContent: "space-between",
           alignItems: "center",
-          paddingHorizontal: 20,
-          paddingVertical: 5,
+          paddingHorizontal: Math.max(12, width * 0.04),
+          paddingTop: 6,
+          paddingBottom: bottomInsetPadding,
           backgroundColor: "transparent",
           position: "absolute",
           bottom: 0,
           zIndex: 20,
+          elevation: 3,
         }}
         onLayout={(e) => {
           setTabBarHeight(e.nativeEvent.layout.height);
-          appCtx.setTabBarHeight(e.nativeEvent.layout.height + 50);
+          appCtx.setTabBarHeight(e.nativeEvent.layout.height + centerButtonSize * 0.5 + 16);
         }}
       >
         {state.routes.map((route, index) => {
@@ -115,14 +146,16 @@ const TabBar = ({ state, descriptors, navigation }) => {
                 { translateX: isFocused ? withTiming(-10) : withTiming(0) },
                 { translateY: isFocused ? withTiming(-6) : withTiming(0) },
               ],
-              tintColor: isFocused
-                ? withTiming("#1D9E75")          // teal active
-                : withTiming("rgba(59,42,26,0.3)"), // brown inactive
             };
           });
-          const animatedColor = useAnimatedStyle(() => {
+          const animatedFocusedOpacity = useAnimatedStyle(() => {
             return {
               opacity: isFocused ? withTiming(1) : withTiming(0),
+            };
+          });
+          const animatedUnfocusedOpacity = useAnimatedStyle(() => {
+            return {
+              opacity: isFocused ? withTiming(0) : withTiming(1),
             };
           });
           const screenDef = screens[index];
@@ -139,7 +172,7 @@ const TabBar = ({ state, descriptors, navigation }) => {
                       justifyContent: "center",
                       alignItems: "center",
                       flex: 1,
-                      padding: 15,
+                      paddingVertical: 12,
                     }}
                   >
                     <Animated.Image
@@ -147,24 +180,24 @@ const TabBar = ({ state, descriptors, navigation }) => {
                       resizeMode={"contain"}
                       style={[
                         {
-                          width: 25,
-                          height: 25,
+                          width: metrics.iconSize,
+                          height: metrics.iconSize,
                           position: "absolute",
                           tintColor: "#1D9E75",
                           overflow: "visible",
                         },
-                        animatedColor,
+                        animatedFocusedOpacity,
                       ]}
                     />
                     <Animated.Image
                       source={screenDef.iconUnfocued}
                       style={[
                         {
-                          width: 25,
-                          height: 25,
+                          width: metrics.iconSize,
+                          height: metrics.iconSize,
                           tintColor: "rgba(59,42,26,0.35)",
-                          opacity: 1,
                         },
+                        animatedUnfocusedOpacity,
                         animatedStyles,
                       ]}
                     />
@@ -177,14 +210,18 @@ const TabBar = ({ state, descriptors, navigation }) => {
                     flex: 1,
                     justifyContent: "center",
                     alignItems: "center",
+                    zIndex: 30,
+                    elevation: 4,
                   }}
                 >
                   <View
                     style={{
-                      transform: [{ translateY: -(50 / 2 + 5) }],
+                      transform: [{ translateY: -centerOffset }],
                     }}
                   >
                     <NewPostIcon
+                      size={centerButtonSize}
+                      buttonRadius={metrics.buttonRadius}
                       exploreActive={activeTabScreen === "DiscoverScreen"}
                       pressed={actionBtnPressed}
                       setPressed={setActionBtnPressed}

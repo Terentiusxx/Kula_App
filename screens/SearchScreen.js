@@ -1,5 +1,5 @@
 import { StatusBar } from "expo-status-bar";
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useRef, useState } from "react";
 import {
   StyleSheet,
   View,
@@ -19,30 +19,64 @@ import Animated, {
   FadeInLeft,
   FadeOutRight,
 } from "react-native-reanimated";
-// MOCK MODE: Using MOCK_USERS — replace with API call to GET /users/search?q=... when backend is ready
-import { MOCK_USERS } from "../data/mockData";
+import { AuthContext } from "../store/auth-context";
+import { fetchNearbyUsers } from "../services/repositories/discoveryRepository";
 
 const SearchScreen = ({ navigation }) => {
+  const authCtx = useContext(AuthContext);
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState([]);
   const [inputFocused, setInputFocused] = useState(false);
-  async function searchUser(text) {
+  const [searchSource, setSearchSource] = useState("remote");
+  const [isSearching, setIsSearching] = useState(false);
+  const latestQueryId = useRef(0);
+  const debounceTimer = useRef(null);
+  function searchUser(text) {
     setSearch(text);
-    if (text.length > 0) {
-      try {
-        setUsers(MOCK_USERS);
-      } catch (error) {
-        console.error("There was a problem with the fetch operation:", error);
-      }
-    } else {
-      setUsers([]);
+    if (debounceTimer.current) {
+      clearTimeout(debounceTimer.current);
     }
+    if (text.length === 0) {
+      setUsers([]);
+      setIsSearching(false);
+      return;
+    }
+
+    setIsSearching(true);
+    const queryId = latestQueryId.current + 1;
+    latestQueryId.current = queryId;
+
+    debounceTimer.current = setTimeout(async () => {
+      const result = await fetchNearbyUsers({
+        searchText: text,
+        maxResults: 30,
+        currentUser: authCtx.userData || {},
+      });
+      if (queryId !== latestQueryId.current) {
+        return;
+      }
+
+      if (result.ok) {
+        setUsers(result.data);
+        setSearchSource(result.source || "remote");
+      } else {
+        setUsers([]);
+      }
+      setIsSearching(false);
+    }, 300);
   }
   useEffect(() => {
     navigation.setOptions({
       headerShown: true,
       title: "Search Friends",
     });
+  }, []);
+  useEffect(() => {
+    return () => {
+      if (debounceTimer.current) {
+        clearTimeout(debounceTimer.current);
+      }
+    };
   }, []);
   return (
     <KeyboardAvoidingView
@@ -79,6 +113,15 @@ const SearchScreen = ({ navigation }) => {
         </ScrollView>
       ) : (
         <>
+          {search.length > 0 && (
+            <View style={styles.hintWrap}>
+              <Animated.Text style={styles.hintText}>
+                {isSearching
+                  ? "Searching nearby people..."
+                  : "No results from " + searchSource + " search."}
+              </Animated.Text>
+            </View>
+          )}
           {!inputFocused && (
             <>
               <Animated.View
@@ -107,5 +150,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#FAF3E0",
+  },
+  hintWrap: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  hintText: {
+    color: GlobalStyles.colors.gray,
+    fontSize: 13,
   },
 });

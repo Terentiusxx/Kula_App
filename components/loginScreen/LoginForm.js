@@ -1,29 +1,167 @@
 import { View, Text, StyleSheet, Alert, TouchableOpacity } from "react-native";
-import React, { useContext } from "react";
+import { Platform } from "react-native";
+import React, { useContext, useEffect, useState } from "react";
 import { Formik } from "formik";
 import * as yup from "yup";
 import Validator from "email-validator";
 import { Ionicons } from "@expo/vector-icons";
+import * as WebBrowser from "expo-web-browser";
+import * as Google from "expo-auth-session/providers/google";
 
 import Button from "../Button";
 import InputField from "../InputField";
 import { AuthContext } from "../../store/auth-context";
+import { KULA } from "../../constants/Styles";
+import { getFriendlyAuthErrorMessage } from "../../utils/authErrorMessage";
+
+WebBrowser.maybeCompleteAuthSession();
 
 const LoginForm = ({ navigation }) => {
   const authCtx = useContext(AuthContext);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isGoogleSigningIn, setIsGoogleSigningIn] = useState(false);
+  const [isSendingEmailLink, setIsSendingEmailLink] = useState(false);
+  const [formError, setFormError] = useState("");
+
+  const googleClientConfig = {
+    expoClientId: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID || undefined,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || undefined,
+    androidClientId:
+      process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ||
+      process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
+      undefined,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || undefined,
+  };
+
+  const isGoogleConfigured = Platform.select({
+    android: Boolean(googleClientConfig.androidClientId),
+    ios: Boolean(googleClientConfig.iosClientId || googleClientConfig.expoClientId),
+    default: Boolean(googleClientConfig.webClientId || googleClientConfig.expoClientId),
+  });
+  const [request, response, promptAsync] = Google.useAuthRequest(
+    isGoogleConfigured ? googleClientConfig : {}
+  );
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function syncGoogleResponse() {
+      if (!response) {
+        return;
+      }
+
+      if (response.type !== "success") {
+        if (isMounted) {
+          if (response.type === "cancel") {
+            setFormError("Google sign-in was cancelled.");
+          } else if (response.type === "error") {
+            setFormError("Google sign-in failed. Please try again.");
+          }
+          setIsGoogleSigningIn(false);
+        }
+        return;
+      }
+
+      const idToken =
+        response.authentication?.idToken || response.params?.id_token || null;
+      const accessToken =
+        response.authentication?.accessToken || response.params?.access_token || null;
+
+      const googleResult = await authCtx.authenticateWithGoogle({
+        idToken,
+        accessToken,
+      });
+
+      if (!googleResult.ok) {
+        setFormError(getFriendlyAuthErrorMessage(googleResult.error));
+      }
+
+      if (isMounted) {
+        setIsGoogleSigningIn(false);
+      }
+    }
+
+    syncGoogleResponse();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [response]);
 
   const LoginFormSchema = yup.object().shape({
     email: yup.string().email().required("Email address is required."),
-    password: yup.string().min(8, "Password must have at least 8 characters."),
+    password: yup
+      .string()
+      .required("Password is required.")
+      .min(8, "Password must have at least 8 characters."),
   });
 
   async function onLogin(email, password) {
-    try {
-      // Mock: authenticate accepts any credentials
-      // TODO (backend): replace with real API call → authCtx.authenticate(token, userData)
-      authCtx.authenticate(email, password);
-    } catch (error) {
-      Alert.alert("Login Failed", error?.message ?? "Something went wrong.");
+    if (isSubmitting) {
+      return;
+    }
+    setFormError("");
+    setIsSubmitting(true);
+    const loginResult = await authCtx.authenticate(
+      String(email || "").trim().toLowerCase(),
+      String(password || "").trim()
+    );
+    setIsSubmitting(false);
+    if (!loginResult.ok) {
+      setFormError(getFriendlyAuthErrorMessage(loginResult.error));
+    }
+  }
+
+  async function onSendEmailLink(email) {
+    if (!Validator.validate(email || "")) {
+      Alert.alert("Email Required", "Enter a valid email to receive a sign-in link.");
+      return;
+    }
+
+    setIsSendingEmailLink(true);
+    const linkResult = await authCtx.sendPasswordlessLink(String(email || "").trim().toLowerCase());
+    setIsSendingEmailLink(false);
+
+    if (!linkResult.ok) {
+      Alert.alert(
+        "Email Link Failed",
+        linkResult.error?.message || "Could not send sign-in link."
+      );
+      return;
+    }
+
+    Alert.alert(
+      "Check Your Email",
+      "A passwordless sign-in link has been sent. Open it on this device to continue."
+    );
+  }
+
+  async function onGoogleSignIn() {
+    if (!isGoogleConfigured) {
+      Alert.alert(
+        "Google Sign-In Not Configured",
+        "Set EXPO_PUBLIC_GOOGLE_* client IDs before using Google sign-in."
+      );
+      return;
+    }
+
+    if (!request) {
+      Alert.alert(
+        "Google Sign-In Unavailable",
+        "Google sign-in is still initializing. Please try again in a moment."
+      );
+      return;
+    }
+
+    setIsGoogleSigningIn(true);
+    const result = await promptAsync();
+    if (result.type !== "success") {
+      if (result.type === "cancel") {
+        setFormError("Google sign-in was cancelled.");
+      } else {
+        setFormError("Google sign-in failed. Please try again.");
+      }
+      setIsGoogleSigningIn(false);
     }
   }
 
@@ -50,7 +188,10 @@ const LoginForm = ({ navigation }) => {
             <View style={styles.fieldGroup}>
               <Text style={styles.fieldLabel}>Email address</Text>
               <InputField
-                onChangeText={handleChange("email")}
+                onChangeText={(value) => {
+                  setFormError("");
+                  handleChange("email")(value);
+                }}
                 onBlur={handleBlur("email")}
                 value={values.email}
                 placeholder="you@example.com"
@@ -73,7 +214,10 @@ const LoginForm = ({ navigation }) => {
               <Text style={styles.fieldLabel}>Password</Text>
               <InputField
                 textContentType="password"
-                onChangeText={handleChange("password")}
+                onChangeText={(value) => {
+                  setFormError("");
+                  handleChange("password")(value);
+                }}
                 onBlur={handleBlur("password")}
                 value={values.password}
                 placeholder="Min. 8 characters"
@@ -92,18 +236,36 @@ const LoginForm = ({ navigation }) => {
             </View>
 
             {/* Forgot password */}
-            <TouchableOpacity style={styles.forgotRow}>
-              <Text style={styles.forgotText}>Forgot password?</Text>
+            <TouchableOpacity
+              style={styles.forgotRow}
+              onPress={() => onSendEmailLink(values.email)}
+              disabled={isSendingEmailLink}
+            >
+              <Text style={styles.forgotText}>
+                {isSendingEmailLink ? "Sending sign-in link..." : "Sign in with email link"}
+              </Text>
             </TouchableOpacity>
 
             {/* Login button */}
             <View style={styles.buttonWrapper}>
+              {!!formError && <Text style={styles.formErrorText}>{formError}</Text>}
               <Button
                 title="Sign in"
                 onPress={handleSubmit}
-                disabled={!isValid}
+                disabled={!isValid || isSubmitting}
                 containerStyle={styles.loginButton}
                 titleStyle={styles.loginButtonText}
+              />
+            </View>
+
+            <View style={styles.buttonWrapperAlt}>
+              <Button
+                title={isGoogleSigningIn ? "Connecting to Google..." : "Continue with Google"}
+                onPress={onGoogleSignIn}
+                disabled={isGoogleSigningIn}
+                secondary
+                containerStyle={styles.googleButton}
+                titleStyle={styles.googleButtonText}
               />
             </View>
 
@@ -133,14 +295,14 @@ const styles = StyleSheet.create({
   fieldLabel: {
     fontSize: 13,
     fontWeight: "600",
-    color: "#4A4A6A",
+    color: KULA.brown,
     marginBottom: 8,
     marginLeft: 4,
     letterSpacing: 0.3,
   },
   errorText: {
     fontSize: 12,
-    color: "#E05252",
+    color: KULA.error,
     marginTop: 5,
     marginLeft: 4,
   },
@@ -151,26 +313,41 @@ const styles = StyleSheet.create({
   },
   forgotText: {
     fontSize: 13,
-    color: "#7A40F8",
+    color: KULA.terracotta,
     fontWeight: "600",
   },
   buttonWrapper: {
     marginBottom: 20,
   },
+  formErrorText: {
+    fontSize: 13,
+    color: KULA.error,
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  buttonWrapperAlt: {
+    marginBottom: 16,
+  },
   loginButton: {
-    backgroundColor: "#7A40F8",
     borderRadius: 16,
-    shadowColor: "#7A40F8",
+    shadowColor: KULA.teal,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOpacity: 0.3,
+    shadowRadius: 10,
+    elevation: 5,
   },
   loginButtonText: {
     fontSize: 16,
     fontWeight: "700",
     letterSpacing: 0.5,
     padding: 18,
+  },
+  googleButton: {
+    borderColor: KULA.terracotta,
+  },
+  googleButtonText: {
+    color: KULA.terracotta,
+    fontWeight: "700",
   },
   signupContainer: {
     flexDirection: "row",
@@ -179,11 +356,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   signupPrompt: {
-    color: "#7A7A9D",
+    color: KULA.muted,
     fontSize: 14,
   },
   signupLink: {
-    color: "#7A40F8",
+    color: KULA.teal,
     fontWeight: "700",
     fontSize: 14,
   },

@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useContext, useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -8,82 +8,24 @@ import {
   Image,
   FlatList,
   StatusBar,
+  ActivityIndicator,
+  Modal,
+  TextInput,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { KULA } from "../constants/Styles";
 import FAB from "../components/UI/FAB";
 import { useNavigation } from "@react-navigation/native";
+import {
+  createWisdomPost,
+  fetchWisdomPosts,
+} from "../services/repositories/wisdomRepository";
+import { AuthContext } from "../store/auth-context";
 
 // ── Mock data ──────────────────────────────────────────────────────────────────
 const CATEGORIES = ["All", "Housing", "Transport", "Culture", "Jobs", "Health"];
-
-const WISDOM_POSTS = [
-  {
-    _id: "w1",
-    question: "Best areas for expats to live in Accra?",
-    authorName: "Sarah Chen",
-    authorPic: "https://i.pravatar.cc/100?img=44",
-    timeAgo: "2h ago",
-    category: "Housing",
-    likes: 42,
-    answerCount: 8,
-    topAnswer: {
-      authorName: "Kofi Mensah",
-      badge: "Local Expert",
-      text:
-        "I recommend East Legon, Cantonments, or Airport Residential. They're safe, well-connected, and have good amenities. East Legon has the best mix of restaurants and shops.",
-    },
-  },
-  {
-    _id: "w2",
-    question: "How to get a local SIM card and data plan?",
-    authorName: "Ahmed Hassan",
-    authorPic: "https://i.pravatar.cc/100?img=53",
-    timeAgo: "5h ago",
-    category: "Transport",
-    likes: 28,
-    answerCount: 5,
-    topAnswer: {
-      authorName: "Amara Okafor",
-      badge: "Community Member",
-      text:
-        "MTN and Vodafone are the best options. Head to any of their retail stores with your passport for instant activation. MTN has the widest coverage across Accra.",
-    },
-  },
-  {
-    _id: "w3",
-    question: "What's the etiquette for greeting locals in Ghana?",
-    authorName: "Yuki Tanaka",
-    authorPic: "https://i.pravatar.cc/100?img=36",
-    timeAgo: "1d ago",
-    category: "Culture",
-    likes: 67,
-    answerCount: 14,
-    topAnswer: {
-      authorName: "Fatima Al-Rashid",
-      badge: "Local Expert",
-      text:
-        "Always greet before getting into business. A friendly 'Good morning/afternoon' goes a long way. Handshakes are common; with elders, a slight bow shows respect.",
-    },
-  },
-  {
-    _id: "w4",
-    question: "Best co-working spaces in Accra for remote workers?",
-    authorName: "Elena Vasquez",
-    authorPic: "https://i.pravatar.cc/100?img=29",
-    timeAgo: "2d ago",
-    category: "Jobs",
-    likes: 35,
-    answerCount: 9,
-    topAnswer: {
-      authorName: "Kofi Asante",
-      badge: "Local Expert",
-      text:
-        "Impact Hub at Airport City is top-tier. Regus at The Octagon and iSpace in Osu are also great. Most offer day passes around 80–120 GHS.",
-    },
-  },
-];
 
 // ── Question card ──────────────────────────────────────────────────────────────
 function WisdomCard({ post }) {
@@ -150,12 +92,97 @@ function WisdomCard({ post }) {
 // ── Wisdom Board Screen ────────────────────────────────────────────────────────
 export default function WisdomBoardScreen() {
   const navigation = useNavigation();
+  const authCtx = useContext(AuthContext);
   const [selectedCategory, setSelectedCategory] = useState("All");
+  const [wisdomPosts, setWisdomPosts] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [isComposerVisible, setIsComposerVisible] = useState(false);
+  const [composeQuestion, setComposeQuestion] = useState("");
+  const [composeCategory, setComposeCategory] = useState("Culture");
+  const [isSubmittingPost, setIsSubmittingPost] = useState(false);
+
+  async function loadWisdomPosts({ silent = false } = {}) {
+    if (silent) {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
+    setLoadError("");
+    const result = await fetchWisdomPosts({ maxResults: 60 });
+
+    if (result.ok) {
+      setWisdomPosts(result.data || []);
+    } else {
+      if (!silent) {
+        setWisdomPosts([]);
+      }
+      setLoadError("Could not load wisdom posts right now.");
+    }
+    setIsLoading(false);
+    setIsRefreshing(false);
+  }
+
+  useEffect(() => {
+    let active = true;
+    loadWisdomPosts();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function handleCreatePost() {
+    const question = String(composeQuestion || "").trim();
+    if (!question) {
+      Alert.alert("Question required", "Please enter your question first.");
+      return;
+    }
+    if (isSubmittingPost) {
+      return;
+    }
+    setIsSubmittingPost(true);
+    const user = authCtx.userData || {};
+    const optimistic = {
+      _id: "local-wisdom-" + Date.now(),
+      question,
+      category: composeCategory,
+      authorName: user.fullName || "You",
+      authorPic: user.picturePath || "https://i.pravatar.cc/100?img=12",
+      timeAgo: "now",
+      likes: 0,
+      answerCount: 0,
+      topAnswer: null,
+    };
+
+    setWisdomPosts((prev) => [optimistic, ...prev]);
+    setComposeQuestion("");
+    setIsComposerVisible(false);
+
+    const createResult = await createWisdomPost({
+      question,
+      category: composeCategory,
+      authorId: user._id || user.id || "",
+      authorName: user.fullName || "",
+      authorPic: user.picturePath || "",
+    });
+
+    if (!createResult.ok) {
+      setWisdomPosts((prev) => prev.filter((item) => item._id !== optimistic._id));
+      Alert.alert("Post failed", createResult.error?.message || "Could not create wisdom post.");
+      setIsSubmittingPost(false);
+      return;
+    }
+
+    setWisdomPosts((prev) => [createResult.data, ...prev.filter((item) => item._id !== optimistic._id)]);
+    setIsSubmittingPost(false);
+  }
 
   const filtered =
     selectedCategory === "All"
-      ? WISDOM_POSTS
-      : WISDOM_POSTS.filter((p) => p.category === selectedCategory);
+      ? wisdomPosts
+      : wisdomPosts.filter((p) => p.category === selectedCategory);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -208,9 +235,105 @@ export default function WisdomBoardScreen() {
         )}
         renderItem={({ item }) => <WisdomCard post={item} />}
         ItemSeparatorComponent={() => <View style={{ height: 16 }} />}
+        ListEmptyComponent={
+          <View style={styles.emptyWrap}>
+            {isLoading ? (
+              <>
+                <ActivityIndicator size="small" color={KULA.teal} />
+                <Text style={styles.emptyText}>Loading wisdom posts...</Text>
+              </>
+            ) : loadError ? (
+              <>
+                <Text style={styles.emptyText}>{loadError}</Text>
+                <TouchableOpacity
+                  style={styles.retryBtn}
+                  onPress={() => loadWisdomPosts({ silent: false })}
+                >
+                  <Text style={styles.retryText}>Retry</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <Text style={styles.emptyText}>No wisdom posts available yet.</Text>
+            )}
+          </View>
+        }
       />
 
-      <FAB onPress={() => {}} icon="add-outline" />
+      <FAB
+        onPress={() => {
+          setComposeCategory(selectedCategory === "All" ? "Culture" : selectedCategory);
+          setIsComposerVisible(true);
+        }}
+        icon="add-outline"
+      />
+      {isRefreshing ? (
+        <View style={styles.refreshBadge}>
+          <ActivityIndicator size="small" color={KULA.teal} />
+        </View>
+      ) : null}
+      <Modal
+        visible={isComposerVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setIsComposerVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Share Wisdom</Text>
+            <TextInput
+              style={styles.modalInput}
+              multiline
+              value={composeQuestion}
+              onChangeText={setComposeQuestion}
+              placeholder="Ask a practical question for the community..."
+              placeholderTextColor={KULA.muted}
+            />
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.modalCategoriesRow}
+            >
+              {CATEGORIES.filter((item) => item !== "All").map((cat) => (
+                <TouchableOpacity
+                  key={cat}
+                  style={[
+                    styles.catPill,
+                    composeCategory === cat && styles.catPillActive,
+                  ]}
+                  onPress={() => setComposeCategory(cat)}
+                >
+                  <Text
+                    style={[
+                      styles.catPillText,
+                      composeCategory === cat && styles.catPillTextActive,
+                    ]}
+                  >
+                    {cat}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.modalCancelBtn}
+                onPress={() => setIsComposerVisible(false)}
+                disabled={isSubmittingPost}
+              >
+                <Text style={styles.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalSubmitBtn}
+                onPress={handleCreatePost}
+                disabled={isSubmittingPost}
+              >
+                <Text style={styles.modalSubmitText}>
+                  {isSubmittingPost ? "Posting..." : "Post"}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -332,5 +455,102 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: KULA.brown,
     lineHeight: 21,
+  },
+  emptyWrap: {
+    paddingHorizontal: 20,
+    paddingVertical: 24,
+    alignItems: "center",
+    gap: 8,
+  },
+  emptyText: {
+    fontSize: 14,
+    color: KULA.muted,
+    textAlign: "center",
+  },
+  retryBtn: {
+    marginTop: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: KULA.teal,
+  },
+  retryText: {
+    color: KULA.white,
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  refreshBadge: {
+    position: "absolute",
+    right: 28,
+    bottom: 96,
+    backgroundColor: KULA.white,
+    borderRadius: 20,
+    width: 32,
+    height: 32,
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: KULA.brown,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "flex-end",
+  },
+  modalCard: {
+    backgroundColor: KULA.white,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 16,
+    gap: 12,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: KULA.brown,
+  },
+  modalInput: {
+    minHeight: 110,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: KULA.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: KULA.brown,
+    fontSize: 15,
+    textAlignVertical: "top",
+  },
+  modalCategoriesRow: {
+    gap: 8,
+    paddingBottom: 2,
+  },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 10,
+    marginTop: 4,
+  },
+  modalCancelBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: KULA.cream,
+  },
+  modalCancelText: {
+    color: KULA.brown,
+    fontWeight: "600",
+  },
+  modalSubmitBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: KULA.teal,
+  },
+  modalSubmitText: {
+    color: KULA.white,
+    fontWeight: "700",
   },
 });

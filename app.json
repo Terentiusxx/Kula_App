@@ -1,31 +1,38 @@
 {
   "expo": {
-    "name": "Social",
-    "slug": "Social",
+    "name": "Kula",
+    "slug": "kula",
+    "scheme": "kula",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/kula-loading-mark-dark.png",
     "userInterfaceStyle": "light",
     "splash": {
-      "image": "./assets/splash.png",
+      "image": "./assets/kula-loading-mark-dark.png",
       "resizeMode": "contain",
-      "backgroundColor": "#262938"
+      "backgroundColor": "#FAF3E0"
     },
     "updates": {
       "fallbackToCacheTimeout": 0
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "supportsTablet": true
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/noserdivers_logo_iupl55.png",
-        "backgroundColor": "#262938"
-      }
+        "foregroundImage": "./assets/kula-adaptive-foreground.png",
+        "backgroundColor": "#1D9E75"
+      },
+      "package": "com.anonymous.social"
     },
     "web": {
       "favicon": "./assets/favicon.png"
-    }
+    },
+    "plugins": [
+      "expo-secure-store"
+    ]
   }
 }
