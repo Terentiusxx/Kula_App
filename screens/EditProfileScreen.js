@@ -13,6 +13,16 @@ import { getUiState, upsertUiState } from "../services/localdb/cacheRepository";
 import { uploadMediaFromUri } from "../services/firebase/storageService";
 import { upsertUserProfile } from "../services/firebase/firestoreService";
 
+const EDIT_INTERESTS = [
+  "Food",
+  "Sports",
+  "Tech",
+  "Music",
+  "Language Exchange",
+  "Art",
+  "Cooking",
+];
+
 const EditProfileScreen = ({ navigation, route }) => {
   const authCtx = useContext(AuthContext);
   const [profilePic, setProfilePic] = useState("");
@@ -26,6 +36,9 @@ const EditProfileScreen = ({ navigation, route }) => {
     friends: "",
     picturePath: "",
     occupation: authCtx.userData.occupation,
+    interests: Array.isArray(authCtx.userData.interests)
+      ? authCtx.userData.interests
+      : [],
   });
   const [uploading, setUploading] = useState({
     status: false,
@@ -75,6 +88,7 @@ const EditProfileScreen = ({ navigation, route }) => {
         occupation: userData.occupation,
         bio: userData.bio,
         picturePath: remotePicturePath,
+        interests: userData.interests || [],
       };
 
       const upsertResult = await upsertUserProfile(userId, profilePayload);
@@ -96,6 +110,7 @@ const EditProfileScreen = ({ navigation, route }) => {
           bio: userData.bio,
           email: userData.email,
           occupation: userData.occupation,
+          interests: userData.interests || [],
         },
         updatedAt: Date.now(),
       });
@@ -115,6 +130,18 @@ const EditProfileScreen = ({ navigation, route }) => {
       title: "Edit Profile",
     });
   }, []);
+
+  function toggleInterest(interest) {
+    setUserData((prev) => {
+      const hasInterest = (prev.interests || []).includes(interest);
+      return {
+        ...prev,
+        interests: hasInterest
+          ? prev.interests.filter((item) => item !== interest)
+          : [...(prev.interests || []), interest],
+      };
+    });
+  }
 
   useEffect(() => {
     draftRef.current = { profilePic, userData };
@@ -252,6 +279,29 @@ const EditProfileScreen = ({ navigation, route }) => {
           multiline={true}
           lightTheme
         />
+
+        <Text style={styles.title}>Interests</Text>
+        <View style={styles.interestsWrap}>
+          {EDIT_INTERESTS.map((interest) => {
+            const selected = (userData.interests || []).includes(interest);
+            return (
+              <Pressable
+                key={interest}
+                onPress={() => toggleInterest(interest)}
+                style={[styles.interestChip, selected && styles.interestChipSelected]}
+              >
+                <Text
+                  style={[
+                    styles.interestChipText,
+                    selected && styles.interestChipTextSelected,
+                  ]}
+                >
+                  {interest}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </ScrollView>
       <View style={{ margin: 10 }}>
         <Button title={"Update"} onPress={updateBtnHandler} />
@@ -293,5 +343,32 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginLeft: 4,
     letterSpacing: 0.3,
+  },
+  interestsWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 6,
+  },
+  interestChip: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1,
+    borderColor: "#EDE8DC",
+    borderRadius: 50,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  interestChipSelected: {
+    backgroundColor: "#1D9E75",
+    borderColor: "#1D9E75",
+  },
+  interestChipText: {
+    color: "#3B2A1A",
+    fontSize: 13,
+    fontWeight: "500",
+  },
+  interestChipTextSelected: {
+    color: "#FFFFFF",
+    fontWeight: "700",
   },
 });

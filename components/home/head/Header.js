@@ -5,40 +5,40 @@ import { KULA } from "../../../constants/Styles";
 import PressEffect from "../../UI/PressEffect";
 import { AuthContext } from "../../../store/auth-context";
 import { fetchNotificationsForUser } from "../../../services/repositories/notificationsRepository";
+import { useFocusEffect } from "@react-navigation/native";
 
 const Header = ({ navigation }) => {
   const authCtx = useContext(AuthContext);
   const [notificationsCount, setNotificationsCount] = useState(0);
   const userId = authCtx.userData?._id || authCtx.userData?.id;
 
-  useEffect(() => {
-    let active = true;
-
-    async function loadNotificationCount() {
-      if (!userId) {
-        if (active) {
-          setNotificationsCount(0);
-        }
-        return;
-      }
-
-      const result = await fetchNotificationsForUser(userId, { maxResults: 99 });
-      if (!active) {
-        return;
-      }
-
-      if (result.ok && Array.isArray(result.data)) {
-        setNotificationsCount(result.data.length);
-      } else {
-        setNotificationsCount(0);
-      }
+  async function loadNotificationCount() {
+    if (!userId) {
+      setNotificationsCount(0);
+      return;
     }
 
+    const result = await fetchNotificationsForUser(userId, { maxResults: 99 });
+    if (result.ok && Array.isArray(result.data)) {
+      setNotificationsCount(result.data.length);
+    } else {
+      setNotificationsCount(0);
+    }
+  }
+
+  useEffect(() => {
     loadNotificationCount();
-    return () => {
-      active = false;
-    };
   }, [userId]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadNotificationCount();
+      const interval = setInterval(() => {
+        loadNotificationCount();
+      }, 10000);
+      return () => clearInterval(interval);
+    }, [userId])
+  );
 
   return (
     <View style={styles.container}>

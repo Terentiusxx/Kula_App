@@ -81,27 +81,32 @@ function normalizeArrayField(value) {
   return Array.isArray(value) ? value : [];
 }
 
-function normalizeUserProfilePayload(payload = {}) {
-  const nowIso = new Date().toISOString();
+function hasOwn(payload, key) {
+  return Object.prototype.hasOwnProperty.call(payload || {}, key);
+}
 
-  return {
-    fullName: payload.fullName || "",
-    username: payload.username || "",
-    email: payload.email || "",
-    bio: payload.bio || "",
-    occupation: payload.occupation || "",
-    picturePath: payload.picturePath || "",
-    originCountry: payload.originCountry || "",
-    originFlag: payload.originFlag || "",
-    currentCity: payload.currentCity || "",
-    location: payload.location || null,
-    arrivalYear: payload.arrivalYear || null,
-    interests: normalizeArrayField(payload.interests),
-    communities: normalizeArrayField(payload.communities),
-    friends: normalizeArrayField(payload.friends),
-    eventsAttended: Number(payload.eventsAttended || 0),
-    createdAt: payload.createdAt || nowIso,
-  };
+function normalizeUserProfilePayload(payload = {}) {
+  const normalized = {};
+
+  if (hasOwn(payload, "fullName")) normalized.fullName = payload.fullName || "";
+  if (hasOwn(payload, "username")) normalized.username = payload.username || "";
+  if (hasOwn(payload, "email")) normalized.email = payload.email || "";
+  if (hasOwn(payload, "bio")) normalized.bio = payload.bio || "";
+  if (hasOwn(payload, "occupation")) normalized.occupation = payload.occupation || "";
+  if (hasOwn(payload, "picturePath")) normalized.picturePath = payload.picturePath || "";
+  if (hasOwn(payload, "originCountry")) normalized.originCountry = payload.originCountry || "";
+  if (hasOwn(payload, "originFlag")) normalized.originFlag = payload.originFlag || "";
+  if (hasOwn(payload, "currentCity")) normalized.currentCity = payload.currentCity || "";
+  if (hasOwn(payload, "location")) normalized.location = payload.location || null;
+  if (hasOwn(payload, "arrivalYear")) normalized.arrivalYear = payload.arrivalYear || null;
+  if (hasOwn(payload, "interests")) normalized.interests = normalizeArrayField(payload.interests);
+  if (hasOwn(payload, "communities")) normalized.communities = normalizeArrayField(payload.communities);
+  if (hasOwn(payload, "friends")) normalized.friends = normalizeArrayField(payload.friends);
+  if (hasOwn(payload, "eventsAttended")) normalized.eventsAttended = Number(payload.eventsAttended || 0);
+  if (hasOwn(payload, "onboardingCompleted")) normalized.onboardingCompleted = Boolean(payload.onboardingCompleted);
+  if (hasOwn(payload, "createdAt")) normalized.createdAt = payload.createdAt;
+
+  return normalized;
 }
 
 export async function upsertUserProfile(userId, payload = {}) {

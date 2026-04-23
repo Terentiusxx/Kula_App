@@ -53,7 +53,8 @@ function toMillis(value) {
 
 function normalizeNotification(item = {}, index = 0) {
   const id = item.id || item._id || "notification_" + index;
-  const mode = String(item.mode || item.type || "FOLLOW").toUpperCase();
+  const rawMode = String(item.mode || item.type || "FOLLOW").toUpperCase();
+  const mode = rawMode === "WAVE" ? "FOLLOW" : rawMode;
 
   return {
     _id: String(id),
@@ -66,6 +67,8 @@ function normalizeNotification(item = {}, index = 0) {
       item.picturePath ||
       "https://i.pravatar.cc/100?img=40",
     postImage: item.postImage || item.image || "",
+    messageText: item.message || item.text || "",
+    chatId: item.chatId || "",
     time: toTimeLabel(item.time || item.createdAt),
   };
 }

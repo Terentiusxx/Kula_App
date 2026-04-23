@@ -167,6 +167,15 @@ export default function EventsScreen() {
     const result = await joinEvent({ userId, eventId: event._id });
     if (result.ok) {
       setJoinedEventIds((prev) => (prev.includes(event._id) ? prev : [...prev, event._id]));
+      setEvents((prev) =>
+        prev.map((item) => {
+          if ((item._id || item.id) !== (event._id || event.id)) {
+            return item;
+          }
+          const nextCount = Number(item.attendeeCount || 0) + 1;
+          return { ...item, attendeeCount: nextCount };
+        })
+      );
     }
   }
 
@@ -206,7 +215,7 @@ export default function EventsScreen() {
             {/* Header */}
             <View style={styles.header}>
               <Text style={[styles.heading, { fontSize: scaleFont(26, 22, 30) }]}>Events</Text>
-              <TouchableOpacity>
+              <TouchableOpacity onPress={() => navigation.navigate("EventsCalendarScreen")}>
                 <Ionicons name="calendar-outline" size={24} color={KULA.brown} />
               </TouchableOpacity>
             </View>

@@ -58,12 +58,53 @@ function failMissingConfig() {
   return fail(createMissingFirebaseConfigError());
 }
 
+function getGoogleConfigForPlatform() {
+  return {
+    android: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || "",
+    ios: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || "",
+    web: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || "",
+    expo: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID || "",
+  };
+}
+
+function hasGoogleClientIdForCurrentPlatform() {
+  const config = getGoogleConfigForPlatform();
+  if (Platform.OS === "android") {
+    return Boolean(config.android);
+  }
+  if (Platform.OS === "ios") {
+    return Boolean(config.ios);
+  }
+  return Boolean(config.web || config.expo);
+}
+
+function parseAndValidateHttpsUrl(inputUrl) {
+  if (!inputUrl) {
+    return null;
+  }
+
+  const candidate = String(inputUrl).trim();
+  if (!candidate) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(candidate);
+    if (parsed.protocol !== "https:") {
+      return null;
+    }
+    return parsed.toString();
+  } catch (_error) {
+    return null;
+  }
+}
+
 function buildEmailLinkSettings() {
-  const continueUrl =
-    process.env.EXPO_PUBLIC_AUTH_EMAIL_LINK_URL ||
-    (firebaseConfig.authDomain
-      ? "https://" + firebaseConfig.authDomain
-      : "");
+  const envContinueUrl = process.env.EXPO_PUBLIC_AUTH_EMAIL_LINK_URL || "";
+  const fallbackContinueUrl = firebaseConfig.authDomain
+    ? "https://" + firebaseConfig.authDomain
+    : "";
+  const continueUrl = parseAndValidateHttpsUrl(envContinueUrl || fallbackContinueUrl);
 
   if (!continueUrl) {
     return null;
@@ -128,9 +169,11 @@ export async function sendPasswordlessEmailLink({ email }) {
   const actionCodeSettings = buildEmailLinkSettings();
   if (!actionCodeSettings) {
     return fail({
-      code: "missing_email_link_url",
+      code: process.env.EXPO_PUBLIC_AUTH_EMAIL_LINK_URL
+        ? "invalid_email_link_url"
+        : "missing_email_link_url",
       message:
-        "Email link sign-in URL is missing. Set EXPO_PUBLIC_AUTH_EMAIL_LINK_URL or provide EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN.",
+        "Email link sign-in URL must be a valid HTTPS URL. Set EXPO_PUBLIC_AUTH_EMAIL_LINK_URL (recommended) or EXPO_PUBLIC_FIREBASE_AUTH_DOMAIN.",
     });
   }
 
@@ -190,6 +233,14 @@ export async function loginWithGoogleCredential({ idToken, accessToken }) {
 
   if (!hasFirebaseConfig()) {
     return failMissingConfig();
+  }
+
+  if (!hasGoogleClientIdForCurrentPlatform()) {
+    return fail({
+      code: "missing_google_client_id",
+      message:
+        "Google OAuth client ID is missing for this platform. Set EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID, EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID, EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID, or EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID as appropriate.",
+    });
   }
 
   try {

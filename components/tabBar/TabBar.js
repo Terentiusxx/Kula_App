@@ -1,5 +1,6 @@
 import { Fragment, useContext, useEffect, useRef, useState } from "react";
 import { View, Pressable, StyleSheet, useWindowDimensions } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import Animated, {
   FadeIn,
   FadeOut,
@@ -17,34 +18,14 @@ const TabBar = ({ state, descriptors, navigation }) => {
   const appCtx = useContext(AppContext);
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const screens = [
-    {
-      name: "HomeScreen",
-      icon: require("../../assets/home-focused.png"),
-      iconUnfocued: require("../../assets/home.png"),
-    },
-    {
-      name: "DiscoverScreen",
-      icon: require("../../assets/explore-focused.png"),
-      iconUnfocued: require("../../assets/explore.png"),
-    },
-    {
-      name: "EventsScreen",
-      icon: require("../../assets/reels-focused.png"),
-      iconUnfocued: require("../../assets/reels.png"),
-    },
-    {
-      name: "MessagesScreen",
-      icon: require("../../assets/chat-focused.png"),
-      iconUnfocued: require("../../assets/chat.png"),
-    },
-    {
-      name: "WisdomBoardScreen",
-      // reuse explore icon as placeholder until a custom asset is added
-      icon: require("../../assets/explore-focused.png"),
-      iconUnfocued: require("../../assets/explore.png"),
-    },
-  ];
+  const iconByRoute = {
+    HomeScreen: "home-outline",
+    DiscoverScreen: "search-outline",
+    EventsScreen: "calendar-outline",
+    MessagesScreen: "chatbubble-ellipses-outline",
+    UserProfileScreen: "person-outline",
+    SettingsScreen: "settings-outline",
+  };
   const [tabBarHeight, setTabBarHeight] = useState(74);
   const [actionBtnPressed, setActionBtnPressed] = useState(false);
   const metrics = getTabBarMetrics(width);
@@ -119,13 +100,6 @@ const TabBar = ({ state, descriptors, navigation }) => {
       >
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
-          const label =
-            options.tabBarLabel !== undefined
-              ? options.tabBarLabel
-              : options.title !== undefined
-              ? options.title
-              : route.name;
-
           const isFocused = state.index === index;
 
           const onPress = () => {
@@ -158,9 +132,8 @@ const TabBar = ({ state, descriptors, navigation }) => {
               opacity: isFocused ? withTiming(0) : withTiming(1),
             };
           });
-          const screenDef = screens[index];
-          // Guard: if no icon mapping exists for this tab, skip rendering it
-          if (!screenDef) return null;
+          const iconName = iconByRoute[route.name];
+          if (!iconName) return null;
 
           return (
             <Fragment key={index}>
@@ -175,32 +148,35 @@ const TabBar = ({ state, descriptors, navigation }) => {
                       paddingVertical: 12,
                     }}
                   >
-                    <Animated.Image
-                      source={screenDef.icon}
-                      resizeMode={"contain"}
+                    <Animated.View
                       style={[
                         {
-                          width: metrics.iconSize,
-                          height: metrics.iconSize,
                           position: "absolute",
-                          tintColor: "#1D9E75",
                           overflow: "visible",
                         },
                         animatedFocusedOpacity,
                       ]}
-                    />
-                    <Animated.Image
-                      source={screenDef.iconUnfocued}
+                    >
+                      <Ionicons
+                        name={iconName}
+                        size={metrics.iconSize}
+                        color={"#1D9E75"}
+                      />
+                    </Animated.View>
+                    <Animated.View
                       style={[
                         {
-                          width: metrics.iconSize,
-                          height: metrics.iconSize,
-                          tintColor: "rgba(59,42,26,0.35)",
                         },
                         animatedUnfocusedOpacity,
                         animatedStyles,
                       ]}
-                    />
+                    >
+                      <Ionicons
+                        name={iconName}
+                        size={metrics.iconSize}
+                        color={"rgba(59,42,26,0.35)"}
+                      />
+                    </Animated.View>
                   </View>
                 </Pressable>
               </View>

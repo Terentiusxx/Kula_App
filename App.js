@@ -5,8 +5,13 @@ import AuthNavigation from "./AuthNavigation";
 import AuthContentProvider, { AuthContext } from "./store/auth-context";
 import { GlobalStyles, KULA } from "./constants/Styles";
 import Loader from "./components/UI/Loader";
+import { getFriendlyAuthErrorMessage } from "./utils/authErrorMessage";
 import { initializeSchema, runLocalDbSmokeTest } from "./services/localdb/schema";
-import { createCollectionDocument } from "./services/firebase/firestoreService";
+import {
+  createCollectionDocument,
+  getCollectionDocuments,
+  upsertCollectionDocumentById,
+} from "./services/firebase/firestoreService";
 import { startOutboxAutoSync, syncOutbox } from "./services/sync/outboxSyncService";
 import { subscribeToSessionChanges } from "./services/repositories/authRepository";
 
@@ -31,13 +36,31 @@ export default function App() {
       },
       "event_attendees:join": async (item) => {
         const payload = item?.payload || {};
-        const result = await createCollectionDocument("event_attendees", {
+        const attendeeDocId =
+          "event:" + String(payload.userId || "") + ":" + String(payload.eventId || "");
+        const result = await upsertCollectionDocumentById("event_attendees", attendeeDocId, {
           userId: payload.userId,
           eventId: payload.eventId,
           joinedAt: payload.joinedAt || Date.now(),
         });
         if (!result.ok) {
           throw new Error(result.error?.message || "Event join sync failed");
+        }
+        const attendeesResult = await getCollectionDocuments("event_attendees", {
+          filters: [{ field: "eventId", operator: "==", value: payload.eventId }],
+          maxResults: 1000,
+        });
+        if (!attendeesResult.ok) {
+          throw new Error(attendeesResult.error?.message || "Event attendee count sync failed");
+        }
+        const attendeeCount = Array.isArray(attendeesResult.data)
+          ? attendeesResult.data.length
+          : 0;
+        const updateEventResult = await upsertCollectionDocumentById("events", payload.eventId, {
+          attendeeCount,
+        });
+        if (!updateEventResult.ok) {
+          throw new Error(updateEventResult.error?.message || "Event count update failed");
         }
         return true;
       },
@@ -51,6 +74,29 @@ export default function App() {
         });
         if (!result.ok) {
           throw new Error(result.error?.message || "Message sync failed");
+        }
+        return true;
+      },
+      "posts:create": async (item) => {
+        const payload = item?.payload || {};
+        const postId = payload.postId;
+        const result = await upsertCollectionDocumentById("posts", postId, {
+          userId: payload.userId,
+          description: payload.description,
+          picturePath: payload.picturePath,
+          fileType: payload.fileType,
+          mediaType: payload.mediaType,
+          mediaWidth: payload.mediaWidth,
+          mediaHeight: payload.mediaHeight,
+          storagePath: payload.storagePath,
+          userFullName: payload.userFullName,
+          userPicturePath: payload.userPicturePath,
+          userInitials: payload.userInitials,
+          likes: payload.likes || [],
+          comments: payload.comments || [],
+        });
+        if (!result.ok) {
+          throw new Error(result.error?.message || "Post sync failed");
         }
         return true;
       },
@@ -79,7 +125,7 @@ export default function App() {
             console.warn("Email link sign-in failed", emailLinkResult.error);
             Alert.alert(
               "Sign-in link failed",
-              emailLinkResult.error?.message || "This sign-in link is invalid or expired. Request a new one from login."
+              getFriendlyAuthErrorMessage(emailLinkResult.error)
             );
           }
         }
@@ -103,7 +149,7 @@ export default function App() {
             console.warn("Email link sign-in failed", result.error);
             Alert.alert(
               "Sign-in link failed",
-              result.error?.message || "This sign-in link is invalid or expired. Request a new one from login."
+              getFriendlyAuthErrorMessage(result.error)
             );
           }
         });

@@ -77,13 +77,14 @@ function normalizeSelectedMedia(value, explicitType = "") {
 
 function NewPostScreen({ navigation, route }) {
   const authCtx = useContext(AuthContext);
-  const [type, setType] = useState();
+  const [type, setType] = useState("image");
   const [post, setPost] = useState(null);
   const [resizeModeCover, setResizeModeCover] = useState(true);
   const [showCamera, setShowCamera] = useState(true);
   const [caption, setCaption] = useState("");
   const draftKey = "draft:new_post";
   const draftRef = useRef({ caption: "", post: null, type: null });
+  const hasPostedSuccessfullyRef = useRef(false);
 
   const [uploading, setUploading] = useState({
     status: false,
@@ -130,11 +131,16 @@ function NewPostScreen({ navigation, route }) {
     });
 
     return () => {
-      upsertUiState(draftKey, { ...draftRef.current, updatedAt: Date.now() });
+      if (!hasPostedSuccessfullyRef.current) {
+        upsertUiState(draftKey, { ...draftRef.current, updatedAt: Date.now() });
+      }
       appStateSubscription?.remove?.();
     };
   }, []);
   async function newPostHandler() {
+    if (!post || uploading.status) {
+      return;
+    }
     if (post) {
       const user = authCtx.userData || {};
       const userId = user._id || user.id;
@@ -182,14 +188,19 @@ function NewPostScreen({ navigation, route }) {
           throw new Error(createResult.error?.message || "Unable to create post");
         }
 
-          upsertUiState(draftKey, {
-            caption: "",
-            post: null,
-            type: null,
-            updatedAt: Date.now(),
-          });
-          setUploading({ status: false, progress: 0, success: true });
-          navigation.goBack();
+        hasPostedSuccessfullyRef.current = true;
+        draftRef.current = { caption: "", post: null, type: "image" };
+        setCaption("");
+        setPost(null);
+        setType("image");
+        upsertUiState(draftKey, {
+          caption: "",
+          post: null,
+          type: "image",
+          updatedAt: Date.now(),
+        });
+        setUploading({ status: false, progress: 100, success: true });
+        navigation.goBack();
       } catch (error) {
         setUploadErrorMessage(error?.message || "Uploading Failed");
         setUploading((prevData) => {
@@ -209,8 +220,42 @@ function NewPostScreen({ navigation, route }) {
         showCamera={showCamera}
         setShowCamera={setShowCamera}
         getPost={(selectedMedia) => setPost(normalizeSelectedMedia(selectedMedia, type))}
-        mode={type === "video" ? type : undefined}
+        mode={type === "video" ? "video" : undefined}
       />
+      <View
+        style={{
+          flexDirection: "row",
+          marginHorizontal: 20,
+          marginTop: 10,
+          marginBottom: 6,
+          borderRadius: 999,
+          backgroundColor: "rgba(255,255,255,0.12)",
+          padding: 4,
+        }}
+      >
+        {["image", "video"].map((mediaMode) => {
+          const active = type === mediaMode;
+          return (
+            <Pressable
+              key={mediaMode}
+              onPress={() => setType(mediaMode)}
+              style={{
+                flex: 1,
+                borderRadius: 999,
+                paddingVertical: 10,
+                alignItems: "center",
+                backgroundColor: active ? "rgba(255,255,255,0.22)" : "transparent",
+              }}
+            >
+              <Ionicons
+                name={mediaMode === "video" ? "videocam-outline" : "image-outline"}
+                size={16}
+                color={"white"}
+              />
+            </Pressable>
+          );
+        })}
+      </View>
       {!post ? (
         <View
           style={{ flex: 1, justifyContent: "center", alignItems: "center" }}

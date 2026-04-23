@@ -1,9 +1,7 @@
-import {
-  createCollectionDocument,
-  getCollectionDocuments,
-} from "../firebase/firestoreService";
+import { getCollectionDocuments, upsertCollectionDocumentById } from "../firebase/firestoreService";
 import { getUiState, upsertUiState } from "../localdb/cacheRepository";
 import { isOnline } from "../network/connectivityService";
+import { queueOrProcessWrite } from "../sync/outboxSyncService";
 
 function ok(data, source = "remote") {
   return { ok: true, data, error: null, source };
@@ -23,10 +21,14 @@ function fail(error) {
 function normalizePost(item = {}, index = 0) {
   const id = item.id || item._id || "post_" + index;
   const mediaType = item.mediaType || item.fileType || "image";
+  const picturePath = String(
+    item.picturePath || item.image || item.mediaUrl || item.videoUrl || ""
+  ).trim();
   return {
     ...item,
     id,
     _id: id,
+    picturePath,
     mediaType,
     fileType: mediaType,
   };
@@ -62,6 +64,24 @@ function cachePosts(stateKey, posts = []) {
     posts,
     updatedAt: Date.now(),
   });
+}
+
+function createLocalPostId() {
+  return "post_" + Date.now() + "_" + Math.random().toString(36).slice(2, 10);
+}
+
+function mergePostIntoCache(stateKey, postPayload) {
+  const existing = getUiState(stateKey);
+  const existingPosts = Array.isArray(existing.data?.payload?.posts)
+    ? existing.data.payload.posts.map(normalizePost)
+    : [];
+  const nextPosts = [
+    normalizePost(postPayload),
+    ...existingPosts.filter(
+      (item) => String(item._id || item.id || "") !== String(postPayload._id || postPayload.id || "")
+    ),
+  ];
+  return cachePosts(stateKey, nextPosts);
 }
 
 export async function fetchFeedPosts({ maxResults = 40 } = {}) {
@@ -120,6 +140,7 @@ export async function fetchUserPosts(userId, { maxResults = 40 } = {}) {
 }
 
 export async function createPostEntry({
+  postId = "",
   userId,
   description = "",
   picturePath = "",
@@ -137,6 +158,7 @@ export async function createPostEntry({
   }
 
   const normalizedMediaType = String(mediaType || fileType || "image");
+  const resolvedPostId = String(postId || createLocalPostId());
   const payload = {
     userId: String(userId),
     description: String(description || "").trim(),
@@ -153,10 +175,57 @@ export async function createPostEntry({
     comments: [],
   };
 
-  const createResult = await createCollectionDocument("posts", payload);
-  if (!createResult.ok) {
-    return fail(createResult.error);
+  const queueResult = await queueOrProcessWrite(
+    {
+      entityType: "posts",
+      operation: "create",
+      payload: {
+        postId: resolvedPostId,
+        ...payload,
+      },
+    },
+    {
+      "posts:create": async (item) => {
+        const queuedPayload = item?.payload || {};
+        const queuedPostId = queuedPayload.postId;
+        const result = await upsertCollectionDocumentById("posts", queuedPostId, {
+          userId: queuedPayload.userId,
+          description: queuedPayload.description,
+          picturePath: queuedPayload.picturePath,
+          fileType: queuedPayload.fileType,
+          mediaType: queuedPayload.mediaType,
+          mediaWidth: queuedPayload.mediaWidth,
+          mediaHeight: queuedPayload.mediaHeight,
+          storagePath: queuedPayload.storagePath,
+          userFullName: queuedPayload.userFullName,
+          userPicturePath: queuedPayload.userPicturePath,
+          userInitials: queuedPayload.userInitials,
+          likes: queuedPayload.likes || [],
+          comments: queuedPayload.comments || [],
+        });
+        if (!result.ok) {
+          throw new Error(result.error?.message || "Failed to create post");
+        }
+        return true;
+      },
+    }
+  );
+  if (!queueResult.ok) {
+    return fail(queueResult.error);
   }
 
-  return ok({ id: createResult.data, ...payload }, "remote");
+  const createdPost = normalizePost({ id: resolvedPostId, _id: resolvedPostId, ...payload });
+  mergePostIntoCache("feed_posts", createdPost);
+  mergePostIntoCache("profile_posts:" + String(userId || "anonymous"), createdPost);
+
+  return ok(
+    {
+      id: resolvedPostId,
+      _id: resolvedPostId,
+      ...payload,
+      queued: Boolean(queueResult.data?.queued),
+      synced: Boolean(queueResult.data?.synced),
+    },
+    queueResult.data?.synced ? "remote" : "outbox"
+  );
 }

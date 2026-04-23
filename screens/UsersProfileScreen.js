@@ -47,10 +47,11 @@ export default function UsersProfileScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const authCtx = useContext(AuthContext);
+  const authUserId = authCtx.userData?._id || authCtx.userData?.id || "";
   const [waved, setWaved] = useState(false);
   const [isWaving, setIsWaving] = useState(false);
   const routeUser = route?.params?.user || null;
-  const routeUserId = route?.params?.userId || routeUser?._id || routeUser?.id || null;
+  const routeUserId = route?.params?.userId || routeUser?._id || routeUser?.id || authUserId || null;
   const [remoteUser, setRemoteUser] = useState(null);
   const [isLoadingUser, setIsLoadingUser] = useState(false);
   const [profileLoadError, setProfileLoadError] = useState("");
@@ -87,10 +88,12 @@ export default function UsersProfileScreen() {
   const user = useMemo(() => {
     return {
       ...EMPTY_PROFILE_USER,
-      ...(remoteUser || {}),
       ...(routeUser || {}),
+      ...(remoteUser || {}),
     };
   }, [remoteUser, routeUser]);
+  const profileUserId = user?._id || user?.id || routeUserId || "";
+  const isSelfProfile = Boolean(authUserId && profileUserId && authUserId === profileUserId);
 
   async function handleWave() {
     const fromUserId = authCtx.userData?._id || authCtx.userData?.id;
@@ -128,6 +131,14 @@ export default function UsersProfileScreen() {
       >
         <Ionicons name="arrow-back" size={22} color={KULA.brown} />
       </TouchableOpacity>
+      {isSelfProfile ? (
+        <TouchableOpacity
+          style={styles.settingsBtn}
+          onPress={() => navigation.navigate("SettingsScreen")}
+        >
+          <Ionicons name="settings-outline" size={20} color={KULA.brown} />
+        </TouchableOpacity>
+      ) : null}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -163,23 +174,35 @@ export default function UsersProfileScreen() {
 
           {/* Action buttons */}
           <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={[styles.waveBtn, waved && styles.waveBtnActive]}
-              onPress={handleWave}
-              activeOpacity={0.85}
-              disabled={waved || isWaving}
-            >
-              <Text style={styles.waveBtnText}>
-                {waved ? "Waved 👋" : isWaving ? "Waving..." : "Wave"}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={styles.messageBtn}
-              onPress={() => navigation.navigate("ChatScreen")}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.messageBtnText}>Message</Text>
-            </TouchableOpacity>
+            {isSelfProfile ? (
+              <TouchableOpacity
+                style={styles.editBtn}
+                onPress={() => navigation.navigate("EditProfileScreen")}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.editBtnText}>Edit Profile</Text>
+              </TouchableOpacity>
+            ) : (
+              <>
+                <TouchableOpacity
+                  style={[styles.waveBtn, waved && styles.waveBtnActive]}
+                  onPress={handleWave}
+                  activeOpacity={0.85}
+                  disabled={waved || isWaving}
+                >
+                  <Text style={styles.waveBtnText}>
+                    {waved ? "Waved 👋" : isWaving ? "Waving..." : "Wave"}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.messageBtn}
+                  onPress={() => navigation.navigate("ChatScreen")}
+                  activeOpacity={0.85}
+                >
+                  <Text style={styles.messageBtnText}>Message</Text>
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
 
@@ -248,6 +271,18 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: 52,
     left: 20,
+    zIndex: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: KULA.cream,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  settingsBtn: {
+    position: "absolute",
+    top: 52,
+    right: 20,
     zIndex: 10,
     width: 40,
     height: 40,
@@ -343,6 +378,14 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   messageBtnText: { color: KULA.teal, fontSize: 16, fontWeight: "600" },
+  editBtn: {
+    flex: 1,
+    backgroundColor: KULA.teal,
+    borderRadius: 50,
+    paddingVertical: 13,
+    alignItems: "center",
+  },
+  editBtnText: { color: KULA.white, fontSize: 16, fontWeight: "700" },
 
   // Dividers & stats
   divider: { height: 1, backgroundColor: KULA.border, marginHorizontal: 0 },

@@ -15,6 +15,8 @@ function NotificationCard({ notification, onWave, isWaved, isWaving }) {
       ? "liked your post"
       : notification.mode === "COMMENT"
       ? "commented on your post"
+      : notification.mode === "MESSAGE"
+      ? "sent you a message"
       : "started following you";
 
   const iconName =
@@ -22,6 +24,8 @@ function NotificationCard({ notification, onWave, isWaved, isWaving }) {
       ? "heart"
       : notification.mode === "COMMENT"
       ? "chatbubble-ellipses"
+      : notification.mode === "MESSAGE"
+      ? "mail"
       : null;
 
   const iconColor =
@@ -46,6 +50,11 @@ function NotificationCard({ notification, onWave, isWaved, isWaving }) {
       <View style={styles.textContent}>
         <Text style={styles.name}>{notification.fromName}</Text>
         <Text style={styles.action}>{actionLabel}</Text>
+        {notification.mode === "MESSAGE" && notification.messageText ? (
+          <Text style={styles.messagePreview} numberOfLines={1}>
+            {notification.messageText}
+          </Text>
+        ) : null}
         <Text style={styles.time}>{notification.time}</Text>
       </View>
 
@@ -107,6 +116,12 @@ const styles = StyleSheet.create({
   textContent: { flex: 1, marginRight: 10 },
   name: { fontWeight: "700", fontSize: 15, color: KULA.brown, marginBottom: 2 },
   action: { fontSize: 13, color: KULA.muted, marginBottom: 3 },
+  messagePreview: {
+    fontSize: 12,
+    color: KULA.brown,
+    marginBottom: 3,
+    opacity: 0.85,
+  },
   time: { fontSize: 11, color: KULA.muted, opacity: 0.7 },
   thumbnail: {
     width: 52,

@@ -61,6 +61,37 @@ function normalizeCoordinates(location) {
   return { latitude, longitude };
 }
 
+function formatDistance(distanceKmApprox) {
+  const distance = Number(distanceKmApprox);
+  if (!Number.isFinite(distance)) {
+    return "Location unavailable";
+  }
+  if (distance < 1) {
+    return "Under 1 km away";
+  }
+  return Math.round(distance) + " km away";
+}
+
+function normalizeCategory(categoryValue) {
+  const value = String(categoryValue || "").trim().toLowerCase();
+  if (value === "events" || value === "event") {
+    return "event";
+  }
+  if (value === "communities" || value === "community") {
+    return "community";
+  }
+  if (value === "people" || value === "person") {
+    return "people";
+  }
+  if (value === "food") {
+    return "food";
+  }
+  if (value === "all") {
+    return "all";
+  }
+  return value;
+}
+
 // ── Result row ─────────────────────────────────────────────────────────────────
 function DiscoverRow({ item, isJoined, onJoin }) {
   const bgColor = CATEGORY_COLORS[item.category] ?? KULA.cream;
@@ -118,6 +149,7 @@ export default function DiscoverScreen() {
     longitudeDelta: 6,
   });
   const { scaleFont } = useResponsiveMetrics();
+  const setFetchingUsers = appCtx.setFetchingUsers;
 
   const userId = authCtx.userData?._id || authCtx.userData?.id;
 
@@ -162,12 +194,13 @@ export default function DiscoverScreen() {
     async function loadDiscoverItems() {
       setIsLoadingDiscover(true);
       setDiscoverError("");
-      appCtx.setFetchingUsers(true);
+      setFetchingUsers(true);
       try {
         const result = await fetchNearbyUsers({
           searchText: "",
           maxResults: 100,
           currentUser: authCtx.userData || {},
+          maxDistanceKm: 100,
         });
 
         if (!active) {
@@ -186,12 +219,20 @@ export default function DiscoverScreen() {
         }
 
         const mapped = sourceItems.map((item, index) => {
-          const category = index % 2 === 0 ? "People" : "Community";
+          const normalizedCategory = normalizeCategory(item.category || item.type);
+          let category = "People";
+          if (normalizedCategory === "community") {
+            category = "Community";
+          } else if (normalizedCategory === "event") {
+            category = "Event";
+          } else if (normalizedCategory === "food") {
+            category = "Food";
+          }
           return {
             _id: String(item._id || item.id || "discover-" + index),
             title: item.fullName || item.title || item.username || "Discover",
             category,
-            distance: "Nearby",
+            distance: formatDistance(item.distanceKmApprox),
             location: item.location || null,
             image:
               item.picturePath ||
@@ -211,7 +252,7 @@ export default function DiscoverScreen() {
         }
       } finally {
         if (active) {
-          appCtx.setFetchingUsers(false);
+          setFetchingUsers(false);
           setIsLoadingDiscover(false);
         }
       }
@@ -220,9 +261,9 @@ export default function DiscoverScreen() {
     loadDiscoverItems();
     return () => {
       active = false;
-      appCtx.setFetchingUsers(false);
+      setFetchingUsers(false);
     };
-  }, [authCtx.userData, appCtx]);
+  }, [userId, setFetchingUsers]);
 
   async function handleJoin(item) {
     if (!userId) {
@@ -251,10 +292,9 @@ export default function DiscoverScreen() {
     if (USE_REMOTE_DISCOVER_SEARCH) {
       return true;
     }
-    const matchesCat =
-      selectedCat === "All" ||
-      item.category.toLowerCase() === selectedCat.toLowerCase() ||
-      (selectedCat === "Communities" && item.category === "Community");
+    const selectedCategory = normalizeCategory(selectedCat);
+    const itemCategory = normalizeCategory(item.category);
+    const matchesCat = selectedCategory === "all" || selectedCategory === itemCategory;
     const matchesSearch = item.title
       .toLowerCase()
       .includes(search.toLowerCase());

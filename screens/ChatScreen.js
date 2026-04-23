@@ -1,5 +1,6 @@
-import { AppState, FlatList, Pressable, StyleSheet, View } from "react-native";
+import { AppState, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 import React, { useContext, useEffect, useRef, useState } from "react";
+import * as Haptics from "expo-haptics";
 import ChatCard from "../components/messagesScreen/ChatCard";
 import InputField from "../components/InputField";
 import { Ionicons } from "@expo/vector-icons";
@@ -16,6 +17,8 @@ const ChatScreen = ({ navigation, route }) => {
   const authCtx = useContext(AuthContext);
   const [message, setMessage] = useState("");
   const [messages, setMessages] = useState([]);
+  const [sendError, setSendError] = useState("");
+  const [isSending, setIsSending] = useState(false);
   const chatId = route?.params?.chatId || "t1";
   const draftKey = "draft:chat:" + chatId;
   const latestMessageRef = useRef("");
@@ -28,22 +31,48 @@ const ChatScreen = ({ navigation, route }) => {
     });
   }, [navigation, route?.params?.contactName]);
 
+  const hasInitialLoadRef = useRef(false);
+  const latestRemoteMessageIdRef = useRef("");
+
   useEffect(() => {
     let active = true;
 
-    async function loadMessages() {
+    async function syncMessages() {
       const result = await fetchMessages(chatId, 200);
-      if (active && result.ok) {
-        const ordered = [...(result.data || [])].reverse();
-        setMessages(ordered);
+      if (!active || !result.ok) {
+        return;
       }
+
+      const ordered = [...(result.data || [])].reverse();
+      const newest = ordered.length > 0 ? ordered[ordered.length - 1] : null;
+      const newestId = newest?._id || newest?.id || "";
+      const currentUserId = authCtx.userData?._id || authCtx.userData?.id;
+      const isIncoming = newest && newest.senderId && newest.senderId !== currentUserId;
+
+      if (
+        hasInitialLoadRef.current &&
+        newestId &&
+        newestId !== latestRemoteMessageIdRef.current &&
+        isIncoming
+      ) {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+
+      if (newestId) {
+        latestRemoteMessageIdRef.current = newestId;
+      }
+      hasInitialLoadRef.current = true;
+      setMessages(ordered);
     }
 
-    loadMessages();
+    syncMessages();
+    const intervalId = setInterval(syncMessages, 3000);
+
     return () => {
       active = false;
+      clearInterval(intervalId);
     };
-  }, [chatId]);
+  }, [chatId, authCtx.userData?._id, authCtx.userData?.id]);
 
   useEffect(() => {
     latestMessageRef.current = message;
@@ -75,6 +104,8 @@ const ChatScreen = ({ navigation, route }) => {
       return;
     }
 
+    setSendError("");
+    setIsSending(true);
     const optimisticMessage = {
       _id: "ui-" + Date.now(),
       senderId,
@@ -87,9 +118,14 @@ const ChatScreen = ({ navigation, route }) => {
     const result = await sendTextMessage({ chatId, senderId, text });
     if (!result.ok) {
       setMessages((prev) => prev.filter((item) => item._id !== optimisticMessage._id));
+      setSendError(result.error?.message || "Message failed to send. Try again.");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setIsSending(false);
       return;
     }
     upsertUiState(draftKey, { message: "", updatedAt: Date.now() });
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setIsSending(false);
   }
 
   return (
@@ -124,6 +160,8 @@ const ChatScreen = ({ navigation, route }) => {
           paddingBottom: Math.max(10, insets.bottom),
         }}
       >
+        {!!sendError ? <Text style={styles.sendErrorText}>{sendError}</Text> : null}
+        {isSending ? <Text style={styles.sendingText}>Sending...</Text> : null}
         <View style={{ flex: 1 }}>
           <InputField
             onChangeText={setMessage}
@@ -148,6 +186,7 @@ const ChatScreen = ({ navigation, route }) => {
             elevation: 3,
           }}
           onPress={handleSend}
+          disabled={isSending}
         >
           <Ionicons name="send" color={"white"} size={22} />
         </Pressable>
@@ -160,4 +199,20 @@ export default ChatScreen;
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FAF3E0" },
+  sendErrorText: {
+    position: "absolute",
+    top: -22,
+    left: 12,
+    right: 12,
+    textAlign: "center",
+    color: "#B13E3E",
+    fontSize: 12,
+  },
+  sendingText: {
+    position: "absolute",
+    top: -22,
+    right: 12,
+    color: GlobalStyles.colors.gray,
+    fontSize: 12,
+  },
 });
