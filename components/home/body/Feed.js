@@ -5,6 +5,7 @@ import PostAdvance from "./PostAdvance";
 import { CONTAINER_HEIGHT } from "../head/Stories";
 import { useSharedValue } from "react-native-reanimated";
 import { fetchFeedPosts } from "../../../services/repositories/postsRepository";
+import { useFocusEffect } from "@react-navigation/native";
 
 const Feed = ({ StoryTranslate }) => {
   const lastScrollY = useSharedValue(0);
@@ -33,6 +34,12 @@ const Feed = ({ StoryTranslate }) => {
     }
     setRefreshing(false);
   }
+
+  useFocusEffect(
+    React.useCallback(() => {
+      refreshFeed();
+    }, [])
+  );
 
   return (
     <View style={styles.container}>

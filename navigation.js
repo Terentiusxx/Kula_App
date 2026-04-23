@@ -25,10 +25,12 @@ import PressEffect from "./components/UI/PressEffect";
 import { GlobalStyles } from "./constants/Styles";
 import DiscoverScreen from "./screens/DiscoverScreen";
 import EventsScreen from "./screens/EventsScreen";
+import EventsCalendarScreen from "./screens/EventsCalendarScreen";
 import FindFriendsScreen from "./screens/FindFriendsScreen";
 import FoodCultureScreen from "./screens/FoodCultureScreen";
 import WisdomBoardScreen from "./screens/WisdomBoardScreen";
 import ViewStoryScreen from "./screens/ViewStoryScreen";
+import SettingsScreen from "./screens/SettingsScreen";
 const Stack = createStackNavigator();
 const Tab = createBottomTabNavigator();
 
@@ -83,7 +85,7 @@ function HomeStack() {
 //   );
 // }
 
-export const SignedInStack = () => {
+export const SignedInStack = ({ initialRouteName = "BottomTabNavigator" }) => {
   function BottomTabNavigator() {
     return (
       <Tab.Navigator
@@ -97,14 +99,19 @@ export const SignedInStack = () => {
         <Tab.Screen name="DiscoverScreen" component={DiscoverScreen} />
         <Tab.Screen name="EventsScreen" component={EventsScreen} />
         <Tab.Screen name="MessagesScreen" component={MessagesScreen} />
-        <Tab.Screen name="WisdomBoardScreen" component={WisdomBoardScreen} />
+        <Tab.Screen name="UserProfileScreen" component={UserProfileScreen} />
+        <Tab.Screen name="SettingsScreen" component={SettingsScreen} />
       </Tab.Navigator>
     );
   }
   return (
     <AppContextProvider>
       <NavigationContainer>
-        <Stack.Navigator screenOptions={screenOptions}>
+        <Stack.Navigator
+          initialRouteName={initialRouteName}
+          screenOptions={screenOptions}
+        >
+          <Stack.Screen name="OnboardingScreen" component={OnboardingScreen} />
           <Stack.Screen
             name="BottomTabNavigator"
             component={BottomTabNavigator}
@@ -114,10 +121,12 @@ export const SignedInStack = () => {
           <Stack.Screen name="AddStoryScreen" component={AddStoryScreen} />
           <Stack.Screen name="ChatScreen" component={ChatScreen} />
           <Stack.Screen name="EditProfileScreen" component={EditProfileScreen} />
+          <Stack.Screen name="SettingsScreen" component={SettingsScreen} />
           <Stack.Screen name="NotificationsScreen" component={NotificationsScreen} />
           <Stack.Screen name="UserProfileScreen" component={UserProfileScreen} />
           <Stack.Screen name="SearchScreen" component={SearchScreen} />
           <Stack.Screen name="MessagesScreen" component={MessagesScreen} />
+          <Stack.Screen name="EventsCalendarScreen" component={EventsCalendarScreen} />
           <Stack.Screen name="FindFriendsScreen" component={FindFriendsScreen} />
           <Stack.Screen name="FoodCultureScreen" component={FoodCultureScreen} />
           <Stack.Screen name="WisdomBoardScreen" component={WisdomBoardScreen} />
@@ -128,13 +137,12 @@ export const SignedInStack = () => {
   );
 };
 
-export const SignedOutStack = ({ initialRouteName = "OnboardingScreen" }) => (
+export const SignedOutStack = ({ initialRouteName = "LoginScreen" }) => (
   <NavigationContainer>
     <Stack.Navigator
       initialRouteName={initialRouteName}
       screenOptions={{ ...screenOptions, headerShown: false }}
     >
-      <Stack.Screen name="OnboardingScreen" component={OnboardingScreen} />
       <Stack.Screen name="LoginScreen" component={LoginScreen} />
       <Stack.Screen name="SignupScreen" component={SignupScreen} />
     </Stack.Navigator>

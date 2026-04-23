@@ -243,3 +243,29 @@ npm run seed:firestore:reset
 - IDs use stable prefixes (for example `seed_user_01`), so re-running does not create duplicate growth.
 - `--reset` only deletes deterministic seed IDs created by this script.
 - The script prints a post-seed validation checklist for key app surfaces (Home, Discover, Events, Messages, Notifications, Wisdom, Food/Culture).
+
+---
+
+## 9. Message Notification Trigger (Cloud Functions)
+
+Message notifications are backend-generated from Firestore writes.
+
+### Source files
+
+- `firebase-functions/index.js`
+- `firebase-functions/package.json`
+
+### What it does
+
+- Watches `chats/{chatId}/messages/{messageId}` creations.
+- Loads chat participants, skips the sender, and writes one notification per recipient into `notifications`.
+- Creates notifications with `mode: "MESSAGE"` and `type: "MESSAGE"` so the mobile app can render them.
+- Skips wave messages (`👋 Wave from ...`) to avoid duplicate notifications (wave notifications are already created client-side).
+
+### Deploy (from project root)
+
+```bash
+cd firebase-functions
+npm install
+npx firebase deploy --only functions:notifyMessageRecipients
+```

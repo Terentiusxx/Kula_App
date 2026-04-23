@@ -20,14 +20,39 @@ import { fetchNearbyUsers } from "../services/repositories/discoveryRepository";
 import { sendWave } from "../services/repositories/wavesRepository";
 
 const FILTERS = ["New Arrivals", "Same Country", "Same Interests", "Nearby"];
-const NEARBY_DISTANCE_KM = 500;
-const NEW_ARRIVAL_WINDOW_YEARS = 2;
+const NEARBY_DISTANCE_KM = 100;
+const NEW_ARRIVAL_WINDOW_DAYS = 1;
 
 function normalizeText(value) {
   return String(value || "")
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ");
+}
+
+function toMillis(value) {
+  if (!value) {
+    return null;
+  }
+  if (typeof value?.toDate === "function") {
+    return value.toDate().getTime();
+  }
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
+  }
+  const parsed = Date.parse(String(value));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatDistanceLabel(distanceKmApprox) {
+  const distance = Number(distanceKmApprox);
+  if (!Number.isFinite(distance)) {
+    return "Location unavailable";
+  }
+  if (distance < 1) {
+    return "Under 1 km away";
+  }
+  return Math.round(distance) + " km away";
 }
 
 // ── Person card ────────────────────────────────────────────────────────────────
@@ -109,6 +134,7 @@ export default function FindFriendsScreen() {
         searchText: "",
         maxResults: 50,
         currentUser: authCtx.userData || {},
+        maxDistanceKm: NEARBY_DISTANCE_KM,
       });
 
       if (!active) {
@@ -116,7 +142,22 @@ export default function FindFriendsScreen() {
       }
 
       if (result.ok) {
-        setPeople(result.data);
+        const peopleWithContext = (result.data || []).map((person) => {
+          const sharedCount = Number(person.sharedInterestsCount || 0);
+          const sharedLabel =
+            sharedCount > 0
+              ? sharedCount + " shared interest" + (sharedCount > 1 ? "s" : "")
+              : "No shared interests yet";
+          return {
+            ...person,
+            contextLine:
+              person.contextLine ||
+              (Number.isFinite(Number(person.distanceKmApprox))
+                ? formatDistanceLabel(person.distanceKmApprox) + " · " + sharedLabel
+                : sharedLabel),
+          };
+        });
+        setPeople(peopleWithContext);
         setSourceLabel(result.source || "remote");
       } else {
         setPeople([]);
@@ -162,14 +203,16 @@ export default function FindFriendsScreen() {
       (currentUser.interests || []).map((item) => normalizeText(item))
     );
     const currentCountry = normalizeText(currentUser.originCountry);
-    const currentYear = new Date().getFullYear();
-    const minArrivalYear = currentYear - NEW_ARRIVAL_WINDOW_YEARS;
+    const newArrivalCutoff = Date.now() - NEW_ARRIVAL_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
     if (selectedFilter === "Same Country") {
       return people.filter((person) => normalizeText(person.originCountry) === currentCountry);
     }
 
     if (selectedFilter === "Same Interests") {
+      if (currentInterests.size === 0) {
+        return [];
+      }
       return people
         .map((person) => {
           const sharedCount = (person.interests || []).reduce((count, interest) => {
@@ -192,8 +235,20 @@ export default function FindFriendsScreen() {
 
     if (selectedFilter === "New Arrivals") {
       return people
-        .filter((person) => Number(person.arrivalYear || 0) >= minArrivalYear)
-        .sort((a, b) => Number(b.arrivalYear || 0) - Number(a.arrivalYear || 0));
+        .filter((person) => {
+          const createdAtMs = toMillis(person.createdAt);
+          const arrivalYear = Number(person.arrivalYear || 0);
+          const currentYear = new Date().getFullYear();
+          return (
+            (Number.isFinite(createdAtMs) && createdAtMs >= newArrivalCutoff) ||
+            (!Number.isFinite(createdAtMs) && arrivalYear === currentYear)
+          );
+        })
+        .sort((a, b) => {
+          const aCreated = toMillis(a.createdAt) || 0;
+          const bCreated = toMillis(b.createdAt) || 0;
+          return bCreated - aCreated;
+        });
     }
 
     return people;
@@ -262,6 +317,8 @@ export default function FindFriendsScreen() {
             <Text style={styles.emptyText}>
               {selectedFilter === "Nearby"
                 ? "No nearby people found with location enabled."
+                : selectedFilter === "Same Interests"
+                  ? "No shared-interest matches yet. Add interests in your profile to improve matches."
                 : selectedFilter === "New Arrivals"
                   ? "No recent arrivals found right now."
                   : "No people found right now."}

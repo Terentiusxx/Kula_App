@@ -6,6 +6,7 @@ import { KULA } from "../constants/Styles";
 import { AuthContext } from "../store/auth-context";
 import { fetchNotificationsForUser } from "../services/repositories/notificationsRepository";
 import { sendWave } from "../services/repositories/wavesRepository";
+import { useFocusEffect } from "@react-navigation/native";
 
 const NotificationsScreen = () => {
   const authCtx = useContext(AuthContext);
@@ -15,42 +16,43 @@ const NotificationsScreen = () => {
   const [wavedFromIds, setWavedFromIds] = useState([]);
   const [wavingFromIds, setWavingFromIds] = useState([]);
 
-  useEffect(() => {
-    let active = true;
+  async function loadNotifications(showLoader = false) {
     const userId = authCtx.userData?._id || authCtx.userData?.id;
-
-    async function loadNotifications() {
-      if (!userId) {
-        if (active) {
-          setNotifications([]);
-          setLoadError("User session not found.");
-          setLoading(false);
-        }
-        return;
-      }
-
-      setLoading(true);
-      setLoadError("");
-      const result = await fetchNotificationsForUser(userId, { maxResults: 60 });
-
-      if (!active) {
-        return;
-      }
-
-      if (result.ok) {
-        setNotifications(result.data || []);
-      } else {
-        setNotifications([]);
-        setLoadError(result.error?.message || "Could not load notifications.");
-      }
+    if (!userId) {
+      setNotifications([]);
+      setLoadError("User session not found.");
       setLoading(false);
+      return;
     }
 
-    loadNotifications();
-    return () => {
-      active = false;
-    };
+    if (showLoader) {
+      setLoading(true);
+    }
+    setLoadError("");
+    const result = await fetchNotificationsForUser(userId, { maxResults: 60 });
+
+    if (result.ok) {
+      setNotifications(result.data || []);
+    } else {
+      setNotifications([]);
+      setLoadError(result.error?.message || "Could not load notifications.");
+    }
+    setLoading(false);
+  }
+
+  useEffect(() => {
+    loadNotifications(true);
   }, [authCtx.userData?._id, authCtx.userData?.id]);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      loadNotifications(false);
+      const interval = setInterval(() => {
+        loadNotifications(false);
+      }, 10000);
+      return () => clearInterval(interval);
+    }, [authCtx.userData?._id, authCtx.userData?.id])
+  );
 
   async function handleWave(notification) {
     const fromUserId = authCtx.userData?._id || authCtx.userData?.id;

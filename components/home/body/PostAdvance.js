@@ -28,12 +28,12 @@ function PostAdvance({ post }) {
     id: post.userId || post.authorId || "",
     fullName: post.userFullName || post.username || "Kula User",
     picturePath: post.userPicturePath || "",
-    originCountry: post.originCountry || "",
-    originFlag: post.originFlag || "",
-    currentCity: post.currentCity || "",
-    arrivalYear: post.arrivalYear || null,
-    bio: post.userBio || "",
-    interests: Array.isArray(post.userInterests) ? post.userInterests : [],
+    ...(post.originCountry ? { originCountry: post.originCountry } : {}),
+    ...(post.originFlag ? { originFlag: post.originFlag } : {}),
+    ...(post.currentCity ? { currentCity: post.currentCity } : {}),
+    ...(post.arrivalYear ? { arrivalYear: post.arrivalYear } : {}),
+    ...(post.userBio ? { bio: post.userBio } : {}),
+    ...(Array.isArray(post.userInterests) ? { interests: post.userInterests } : {}),
   };
   const mediaType = inferMediaTypeFromPost(post);
 

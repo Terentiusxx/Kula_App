@@ -63,7 +63,10 @@ function normalizeEvent(item = {}) {
   const location = item.location || item.city || "Location TBA";
   const time = item.time || item.startTimeLabel || "Time TBA";
   const category = item.category || item.type || "Community";
-  const attendeeCount = Number(item.attendeeCount || item.attendeesCount || 0);
+  const attendeesArrayCount = Array.isArray(item.attendees) ? item.attendees.length : 0;
+  const attendeeCount = Number(
+    item.attendeeCount ?? item.attendeesCount ?? attendeesArrayCount ?? 0
+  );
 
   return {
     ...item,
@@ -76,6 +79,43 @@ function normalizeEvent(item = {}) {
     category,
     attendeeCount: Number.isFinite(attendeeCount) ? attendeeCount : 0,
   };
+}
+
+async function syncEventAttendeeCount(eventId) {
+  if (!eventId) {
+    return fail({ code: "missing_event_id", message: "eventId is required" });
+  }
+
+  const attendeesResult = await getCollectionDocuments("event_attendees", {
+    filters: [{ field: "eventId", operator: "==", value: eventId }],
+    maxResults: 1000,
+  });
+  if (!attendeesResult.ok) {
+    return attendeesResult;
+  }
+
+  const attendeeCount = Array.isArray(attendeesResult.data)
+    ? attendeesResult.data.length
+    : 0;
+  const upsertEventResult = await upsertCollectionDocumentById("events", eventId, {
+    attendeeCount,
+  });
+  if (!upsertEventResult.ok) {
+    return upsertEventResult;
+  }
+
+  const cachedEvent = listCacheRecords("events_cache", 500);
+  if (cachedEvent.ok) {
+    const matching = (cachedEvent.data || []).find((row) => row.id === String(eventId));
+    if (matching?.payload) {
+      upsertCacheRecord("events_cache", String(eventId), {
+        ...matching.payload,
+        attendeeCount,
+      });
+    }
+  }
+
+  return ok(attendeeCount);
 }
 
 export async function fetchEvents(limitCount = 50) {
@@ -144,6 +184,10 @@ export async function joinEvent({ userId, eventId }) {
         });
         if (!result.ok) {
           throw new Error(result.error?.message || "Failed to persist event join");
+        }
+        const syncCountResult = await syncEventAttendeeCount(payload.eventId);
+        if (!syncCountResult.ok) {
+          throw new Error(syncCountResult.error?.message || "Failed to sync attendee count");
         }
         return true;
       },

@@ -26,16 +26,13 @@ const LoginForm = ({ navigation }) => {
   const googleClientConfig = {
     expoClientId: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID || undefined,
     iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || undefined,
-    androidClientId:
-      process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ||
-      process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ||
-      undefined,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || undefined,
     webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || undefined,
   };
 
   const isGoogleConfigured = Platform.select({
     android: Boolean(googleClientConfig.androidClientId),
-    ios: Boolean(googleClientConfig.iosClientId || googleClientConfig.expoClientId),
+    ios: Boolean(googleClientConfig.iosClientId),
     default: Boolean(googleClientConfig.webClientId || googleClientConfig.expoClientId),
   });
   const [request, response, promptAsync] = Google.useAuthRequest(
@@ -55,7 +52,9 @@ const LoginForm = ({ navigation }) => {
           if (response.type === "cancel") {
             setFormError("Google sign-in was cancelled.");
           } else if (response.type === "error") {
-            setFormError("Google sign-in failed. Please try again.");
+            const providerErrorMessage =
+              response.error?.message || response.params?.error_description;
+            setFormError(providerErrorMessage || "Google sign-in failed. Please try again.");
           }
           setIsGoogleSigningIn(false);
         }
@@ -125,7 +124,7 @@ const LoginForm = ({ navigation }) => {
     if (!linkResult.ok) {
       Alert.alert(
         "Email Link Failed",
-        linkResult.error?.message || "Could not send sign-in link."
+        getFriendlyAuthErrorMessage(linkResult.error)
       );
       return;
     }

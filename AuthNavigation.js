@@ -4,16 +4,17 @@ import { AuthContext } from "./store/auth-context";
 
 const AuthNavigation = () => {
   const authCtx = useContext(AuthContext);
-  const signedOutInitialRoute = authCtx.hasCompletedOnboarding
-    ? "LoginScreen"
-    : "OnboardingScreen";
 
   return (
     <>
       {authCtx.isAuthenticated ? (
-        <SignedInStack />
+        <SignedInStack
+          initialRouteName={
+            authCtx.needsOnboarding ? "OnboardingScreen" : "BottomTabNavigator"
+          }
+        />
       ) : (
-        <SignedOutStack initialRouteName={signedOutInitialRoute} />
+        <SignedOutStack initialRouteName="LoginScreen" />
       )}
     </>
   );

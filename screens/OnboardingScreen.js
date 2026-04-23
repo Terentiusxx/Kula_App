@@ -86,6 +86,7 @@ export default function OnboardingScreen() {
 
   // Step 2 state
   const [selectedInterests, setSelectedInterests] = useState([]);
+  const [interestError, setInterestError] = useState("");
   const [locationStatus, setLocationStatus] = useState("idle");
   const [locationMessage, setLocationMessage] = useState("");
   const { width, height } = useWindowDimensions();
@@ -97,6 +98,10 @@ export default function OnboardingScreen() {
   );
 
   function next() {
+    if (step === 2 && selectedInterests.length === 0) {
+      setInterestError("Select at least one interest to continue.");
+      return;
+    }
     if (step < 3) setStep(step + 1);
     else finishOnboarding();
   }
@@ -118,6 +123,13 @@ export default function OnboardingScreen() {
     }
 
     await authCtx.markOnboardingComplete();
+    if (authCtx.isAuthenticated) {
+      navigation.reset({
+        index: 0,
+        routes: [{ name: "BottomTabNavigator" }],
+      });
+      return;
+    }
     navigation.navigate("LoginScreen");
   }
 
@@ -178,6 +190,9 @@ export default function OnboardingScreen() {
   }
 
   function toggleInterest(interest) {
+    if (interestError) {
+      setInterestError("");
+    }
     setSelectedInterests((prev) =>
       prev.includes(interest)
         ? prev.filter((i) => i !== interest)
@@ -314,7 +329,9 @@ export default function OnboardingScreen() {
 
           <View style={styles.spacer} />
           <CtaButton label="Continue" onPress={next} />
-          <SkipLink onPress={next} />
+          {!!interestError ? (
+            <Text style={styles.interestErrorText}>{interestError}</Text>
+          ) : null}
         </View>
       </SafeAreaView>
     );
@@ -449,6 +466,12 @@ const styles = StyleSheet.create({
   tagSelected: { backgroundColor: KULA.teal },
   tagText: { fontSize: 14, color: KULA.brown, fontWeight: "500" },
   tagTextSelected: { color: KULA.white, fontWeight: "700" },
+  interestErrorText: {
+    color: KULA.error,
+    fontSize: 13,
+    marginTop: 8,
+    textAlign: "center",
+  },
 
   spacer: { flex: 1, minHeight: 40 },
 

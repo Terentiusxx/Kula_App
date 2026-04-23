@@ -66,6 +66,12 @@ function normalizeUserData(authUser, fallback = EMPTY_USER) {
   };
 }
 
+function appendIfPresent(target, key, value) {
+  if (value !== undefined && value !== null && String(value).trim() !== "") {
+    target[key] = value;
+  }
+}
+
 async function persistSession(authUser, appUser) {
   try {
     if (authUser?.getIdToken) {
@@ -156,6 +162,7 @@ export const AuthContext = createContext({
   userData: {},
   isAuthenticated: false,
   hasCompletedOnboarding: false,
+  needsOnboarding: false,
   authenticate: async () => ok(null),
   logout: async () => ok(true),
   markOnboardingComplete: async () => ok(true),
@@ -167,10 +174,19 @@ function AuthContentProvider({ children }) {
   const [userData, setUserData] = useState(EMPTY_USER);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [hasCompletedOnboarding, setHasCompletedOnboarding] = useState(false);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
-  async function readOnboardingFlag() {
+  function buildOnboardingKey(userId) {
+    if (!userId) {
+      return ONBOARDING_COMPLETE_KEY;
+    }
+    return ONBOARDING_COMPLETE_KEY + "_" + userId;
+  }
+
+  async function readOnboardingFlag(userId) {
     try {
-      const raw = await SecureStore.getItemAsync(ONBOARDING_COMPLETE_KEY);
+      const userKey = buildOnboardingKey(userId);
+      const raw = await SecureStore.getItemAsync(userKey);
       return raw === "true";
     } catch (_error) {
       return false;
@@ -179,15 +195,21 @@ function AuthContentProvider({ children }) {
 
   async function markOnboardingComplete() {
     try {
-      await SecureStore.setItemAsync(ONBOARDING_COMPLETE_KEY, "true");
+      const userId = userData?._id || userData?.id;
+      await SecureStore.setItemAsync(buildOnboardingKey(userId), "true");
+      if (userId) {
+        await upsertUserProfile(userId, { onboardingCompleted: true });
+      }
       setHasCompletedOnboarding(true);
+      setNeedsOnboarding(false);
       return ok(true);
     } catch (error) {
       return fail(error);
     }
   }
 
-  async function finalizeAuthUser(authUser) {
+  async function finalizeAuthUser(authUser, options = {}) {
+    const { forceNeedsOnboarding = false } = options;
     try {
       const normalized = normalizeUserData(authUser);
       const userId = normalized._id || normalized.id;
@@ -195,11 +217,14 @@ function AuthContentProvider({ children }) {
       const pendingOnboardingProfile = await readPendingOnboardingProfile();
 
       if (userId) {
+        const profileUpsertPayload = {};
+        appendIfPresent(profileUpsertPayload, "fullName", normalized.fullName);
+        appendIfPresent(profileUpsertPayload, "username", normalized.username);
+        appendIfPresent(profileUpsertPayload, "email", normalized.email);
+        appendIfPresent(profileUpsertPayload, "picturePath", normalized.picturePath);
+
         const upsertResult = await upsertUserProfile(userId, {
-          fullName: normalized.fullName,
-          username: normalized.username,
-          email: normalized.email,
-          picturePath: normalized.picturePath,
+          ...profileUpsertPayload,
           ...(pendingOnboardingProfile || {}),
         });
         if (!upsertResult.ok) {
@@ -207,7 +232,17 @@ function AuthContentProvider({ children }) {
         }
         const profileResult = await getUserProfile(userId);
         profileData = profileResult.ok ? profileResult.data : null;
+        if (!profileData?.createdAt) {
+          await upsertUserProfile(userId, { createdAt: new Date().toISOString() });
+          const refetchProfileResult = await getUserProfile(userId);
+          profileData = refetchProfileResult.ok ? refetchProfileResult.data : profileData;
+        }
       }
+
+      const profileCompleted = Boolean(profileData?.onboardingCompleted);
+      const localCompleted = await readOnboardingFlag(userId);
+      const completedOnboarding = profileCompleted || localCompleted;
+      const shouldRunOnboarding = forceNeedsOnboarding || !completedOnboarding;
 
       const nextUserData = {
         ...normalized,
@@ -218,6 +253,8 @@ function AuthContentProvider({ children }) {
       };
       setUserData(nextUserData);
       setIsAuthenticated(true);
+      setHasCompletedOnboarding(completedOnboarding);
+      setNeedsOnboarding(shouldRunOnboarding);
       await persistSession(authUser, nextUserData);
       if (pendingOnboardingProfile) {
         await clearPendingOnboardingProfile();
@@ -234,6 +271,8 @@ function AuthContentProvider({ children }) {
     if (!authUser) {
       setIsAuthenticated(false);
       setUserData(EMPTY_USER);
+      setHasCompletedOnboarding(false);
+      setNeedsOnboarding(false);
       await clearPersistedSession();
       return ok(null);
     }
@@ -241,9 +280,6 @@ function AuthContentProvider({ children }) {
   }
 
   async function restoreSession() {
-    const onboardingFlag = await readOnboardingFlag();
-    setHasCompletedOnboarding(onboardingFlag);
-
     const restoredResult = await restoreSessionRepository();
     if (restoredResult.ok && restoredResult.data) {
       return finalizeAuthUser(restoredResult.data);
@@ -252,6 +288,8 @@ function AuthContentProvider({ children }) {
     await clearPersistedSession();
     setIsAuthenticated(false);
     setUserData(EMPTY_USER);
+    setHasCompletedOnboarding(false);
+    setNeedsOnboarding(false);
     return ok(null);
   }
 
@@ -260,10 +298,12 @@ function AuthContentProvider({ children }) {
     if (!registerResult.ok || !registerResult.data) {
       setIsAuthenticated(false);
       setUserData(EMPTY_USER);
+      setHasCompletedOnboarding(false);
+      setNeedsOnboarding(false);
       return fail(registerResult.error);
     }
 
-    return finalizeAuthUser(registerResult.data);
+    return finalizeAuthUser(registerResult.data, { forceNeedsOnboarding: true });
   }
 
   async function authenticate(email, password) {
@@ -271,6 +311,8 @@ function AuthContentProvider({ children }) {
     if (!loginResult.ok || !loginResult.data) {
       setIsAuthenticated(false);
       setUserData(EMPTY_USER);
+      setHasCompletedOnboarding(false);
+      setNeedsOnboarding(false);
       return fail(loginResult.error);
     }
 
@@ -312,6 +354,8 @@ function AuthContentProvider({ children }) {
     if (!linkLoginResult.ok || !linkLoginResult.data) {
       setIsAuthenticated(false);
       setUserData(EMPTY_USER);
+      setHasCompletedOnboarding(false);
+      setNeedsOnboarding(false);
       return fail(linkLoginResult.error);
     }
 
@@ -324,6 +368,8 @@ function AuthContentProvider({ children }) {
     if (!googleResult.ok || !googleResult.data) {
       setIsAuthenticated(false);
       setUserData(EMPTY_USER);
+      setHasCompletedOnboarding(false);
+      setNeedsOnboarding(false);
       return fail(googleResult.error);
     }
 
@@ -337,6 +383,8 @@ function AuthContentProvider({ children }) {
     await clearPendingOnboardingProfile();
     setIsAuthenticated(false);
     setUserData(EMPTY_USER);
+    setHasCompletedOnboarding(false);
+    setNeedsOnboarding(false);
     return ok(true);
   }
 
@@ -358,6 +406,7 @@ function AuthContentProvider({ children }) {
         userData,
         isAuthenticated,
         hasCompletedOnboarding,
+        needsOnboarding,
         authenticate,
         register,
         sendPasswordlessLink,
